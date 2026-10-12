@@ -50,10 +50,10 @@ input[type=search] { width: 100%; margin-bottom: 10px; }
 .grid button:hover { border-color: var(--accent); }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 12px 0; }
 .form { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
-.form label, .settings label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+.form label, .settings label { display: grid; align-content: start; gap: 4px; font-size: 13px; color: var(--muted); }
 label.inline { display: flex; align-items: center; gap: 8px; color: var(--text); font-size: 14px; margin: 6px 0; }
 .settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
-fieldset { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); display: grid; gap: 10px; min-width: 0; }
+fieldset { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); display: grid; align-content: start; gap: 10px; min-width: 0; }
 legend { font-weight: 600; padding: 0 6px; }
 .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
