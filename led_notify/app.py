@@ -86,7 +86,7 @@ def main(argv=None) -> None:
         p.error("set STRIP_ADDRESS / --address, or use --fake-strip")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     app, _ = build(Path(args.data_dir), args.address, args.fake_strip, not args.no_monitors)
-    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="info")
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="info", access_log=False)
 
 
 if __name__ == "__main__":

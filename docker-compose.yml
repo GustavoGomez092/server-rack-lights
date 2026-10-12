@@ -7,6 +7,11 @@ services:
     network_mode: host
     restart: unless-stopped
     stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
     cap_add: [NET_RAW, NET_ADMIN, SYS_RAWIO, SYS_ADMIN]
     devices:
       - /dev/nvme0:/dev/nvme0
@@ -17,8 +22,8 @@ services:
       PORT: "8787"
     volumes:
       - type: bind
-        source: /run/dbus/system_bus_socket
-        target: /run/dbus/system_bus_socket
+        source: /run/dbus
+        target: /run/dbus
       - type: bind
         source: /var/run/docker.sock
         target: /var/run/docker.sock
