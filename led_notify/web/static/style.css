@@ -67,3 +67,6 @@ code { font-size: 12px; }
 #toast.bad { background: var(--bad); color: #fff; }
 
 .logo { width: 28px; height: 28px; border-radius: 6px; }
+
+.nowrap { white-space: nowrap; }
+button.link.play-sound, button.link.play-sound-row { color: var(--accent); margin-left: 6px; }

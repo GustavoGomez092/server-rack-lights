@@ -73,7 +73,7 @@
     <h2>Rules</h2>
     <div class="table-wrap">
       <table id="rules-table">
-        <thead><tr><th>Event</th><th>On</th><th>Priority</th><th>Pattern</th><th>Duration (s)</th><th>Quiet hours</th></tr></thead>
+        <thead><tr><th>Event</th><th>On</th><th>Priority</th><th>Pattern</th><th>Sound</th><th>Duration (s)</th><th>Quiet hours</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -81,6 +81,20 @@
     <h2>Settings</h2>
     <form id="settings-form" class="settings" onsubmit="return false"></form>
     <button id="save-settings">Save settings</button>
+    <h2>Sounds</h2>
+    <div class="card">
+      <div class="row gap">
+        <input type="file" id="sound-file" accept=".wav,.mp3,audio/wav,audio/mpeg">
+        <button id="sound-upload">Upload</button>
+        <span class="muted">WAV or MP3, up to 10 s and 2 MB</span>
+      </div>
+      <div class="table-wrap">
+        <table id="sounds-table">
+          <thead><tr><th>Sound</th><th>Length</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
   </section>
   <section id="tab-log" hidden>
     <div class="table-wrap">

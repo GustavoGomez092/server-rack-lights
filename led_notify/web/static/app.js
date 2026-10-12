@@ -49,7 +49,7 @@ async function act(fn, okMsg) {
   }
 }
 
-const state = { catalog: { named: [], effects: [] }, rules: {}, settings: {}, devices: [], log: [] };
+const state = { catalog: { named: [], effects: [] }, rules: {}, settings: {}, devices: [], log: [], sounds: [] };
 
 /* ---------- header ---------- */
 function renderState(s) {
@@ -187,6 +187,8 @@ const FIELDS = [
     ["idle.breath_color", "select", "Breath color", ["red", "green", "blue", "yellow", "cyan", "purple", "white"]],
     ["idle.breath_speed", "number", "Breath speed (1-10)"], ["idle.brightness", "number", "Idle brightness (0-255)"],
     ["max_brightness", "number", "Max brightness (0-255)"], ["manual_timeout_min", "number", "Manual timeout (min)"]]],
+  ["Audio", [["audio.enabled", "checkbox", "Chimes enabled"], ["audio.volume_pct", "number", "Volume % (day)"],
+    ["audio.night_volume_pct", "number", "Night volume % (critical only)"]]],
   ["Internet", [["internet.slow_rtt_ms", "number", "Slow if median ping above (ms)"], ["internet.slow_loss_pct", "number", "Slow if packet loss above (%)"]]],
   ["Disk & CPU", [["disk.full_pct", "number", "Disk full at (%)"], ["disk.clear_pct", "number", "Clear below (%)"],
     ["thermal.hot_c", "number", "CPU hot at (°C)"], ["thermal.clear_c", "number", "Clear below (°C)"]]],
@@ -197,12 +199,16 @@ const opts = (values, selected) => values.map((v) => `<option ${v === selected ?
 
 async function loadRulesAndSettings() {
   await act(async () => {
-    [state.rules, state.settings] = await Promise.all([api("GET", "/api/rules"), api("GET", "/api/settings")]);
+    [state.rules, state.settings, state.sounds] = await Promise.all([
+      api("GET", "/api/rules"), api("GET", "/api/settings"), api("GET", "/api/sounds")]);
     renderRules();
     renderSettings();
+    renderSounds();
     renderEventButtons();
   });
 }
+const soundOptions = (selected) => `<option value="" ${selected ? "" : "selected"}>(silent)</option>` +
+  state.sounds.map((s) => `<option value="${esc(s.ref)}" ${s.ref === selected ? "selected" : ""}>${esc(s.ref)}</option>`).join("");
 function renderRules() {
   $("#rules-table tbody").innerHTML = Object.entries(state.rules).map(([name, r]) => `
     <tr data-name="${esc(name)}">
@@ -210,6 +216,8 @@ function renderRules() {
       <td><input type="checkbox" data-k="enabled" ${r.enabled ? "checked" : ""}></td>
       <td><select data-k="priority">${opts(["low", "normal", "high", "critical"], r.priority)}</select></td>
       <td><select data-k="pattern">${opts(state.catalog.named, r.pattern)}</select></td>
+      <td class="nowrap"><select data-k="sound">${soundOptions(r.sound)}</select>
+        <button type="button" class="link play-sound" title="Preview sound">▶</button></td>
       <td><input type="number" data-k="duration_s" min="0.5" max="60" step="0.5" value="${r.duration_s ?? ""}" placeholder="auto"></td>
       <td><select data-k="quiet_behavior">${opts(["dim", "suppress"], r.quiet_behavior)}</select></td>
     </tr>`).join("");
@@ -220,7 +228,10 @@ $("#save-rules").addEventListener("click", () => {
     const r = rules[tr.dataset.name];
     $$("[data-k]", tr).forEach((el) => {
       const k = el.dataset.k;
-      r[k] = el.type === "checkbox" ? el.checked : k === "duration_s" ? (el.value === "" ? null : Number(el.value)) : el.value;
+      r[k] = el.type === "checkbox" ? el.checked
+        : k === "duration_s" ? (el.value === "" ? null : Number(el.value))
+        : k === "sound" ? (el.value || null)
+        : el.value;
     });
   });
   act(async () => { state.rules = await api("PUT", "/api/rules", rules); renderEventButtons(); }, "Rules saved");
@@ -246,6 +257,50 @@ $("#save-settings").addEventListener("click", () => {
     else setPath(patch, el.dataset.path, el.value);
   });
   act(async () => { state.settings = await api("PUT", "/api/settings", patch); renderSettings(); }, "Settings saved");
+});
+
+async function playSound(ref) {
+  if (!ref) { toast("Silent: nothing to play"); return; }
+  await act(() => api("POST", "/api/sounds/play", { sound: ref }), `Playing ${ref}`);
+}
+$("#rules-table").addEventListener("click", (e) => {
+  const b = e.target.closest(".play-sound");
+  if (b) playSound($("select[data-k=sound]", b.closest("tr")).value);
+});
+function renderSounds() {
+  $("#sounds-table tbody").innerHTML = state.sounds.map((s) => `
+    <tr data-ref="${esc(s.ref)}" data-name="${esc(s.name)}">
+      <td><code>${esc(s.ref)}</code>${s.builtin ? ' <span class="pill tiny">built-in</span>' : ""}</td>
+      <td>${s.duration_s == null ? "?" : esc(s.duration_s) + " s"}</td>
+      <td class="nowrap"><button type="button" class="link play-sound-row">▶ Play</button>
+        ${s.builtin ? "" : '<button type="button" class="link sound-delete">Delete</button>'}</td>
+    </tr>`).join("");
+}
+$("#sounds-table").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr[data-ref]");
+  if (!tr) return;
+  if (e.target.classList.contains("play-sound-row")) playSound(tr.dataset.ref);
+  if (e.target.classList.contains("sound-delete")) {
+    if (!confirm(`Delete ${tr.dataset.ref}? Rules using it switch to "default".`)) return;
+    act(async () => {
+      const r = await api("DELETE", `/api/sounds/${encodeURIComponent(tr.dataset.name)}`);
+      await loadRulesAndSettings();
+      toast(r.rules_reset.length ? `Deleted; reset ${r.rules_reset.join(", ")} to default` : "Deleted");
+    });
+  }
+});
+$("#sound-upload").addEventListener("click", () => {
+  const file = $("#sound-file").files[0];
+  if (!file) { toast("Choose a WAV or MP3 file first", true); return; }
+  const type = file.type || (file.name.toLowerCase().endsWith(".mp3") ? "audio/mpeg" : "audio/wav");
+  act(async () => {
+    const res = await fetch(`/api/sounds/${encodeURIComponent(file.name)}`, { method: "PUT", headers: { "Content-Type": type }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `HTTP ${res.status}`);
+    $("#sound-file").value = "";
+    await loadRulesAndSettings();
+    toast(`Uploaded ${data.ref}`);
+  });
 });
 
 /* ---------- log tab ---------- */
