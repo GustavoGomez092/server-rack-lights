@@ -40,8 +40,17 @@ class FakeClock:
         await asyncio.sleep(0)
 
 
+async def pump(n: int = 40) -> None:
+    """Let background tasks (e.g. a looping steady sequence) run for a few loop iterations."""
+    for _ in range(n):
+        await asyncio.sleep(0)
+
+
 async def settle(arbiter, rounds: int = 20) -> None:
-    """Run arbiter ticks until queued one-shots have played (FakeClock makes them instant)."""
+    """Run arbiter ticks until queued one-shots have played (FakeClock makes them instant).
+
+    Only one-shots are awaited: a steady Sequence loops forever in its own task, so it is
+    never awaited here (use pump() to let it advance)."""
     for _ in range(rounds):
         await arbiter.tick()
         task = arbiter.playing_task

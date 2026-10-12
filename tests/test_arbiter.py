@@ -9,7 +9,7 @@ from led_notify.engine.player import Player
 from led_notify.events import Event
 from led_notify.hub import Hub
 from led_notify.patterns import PatternError
-from tests.fakes import settle
+from tests.fakes import pump, settle
 
 IDLE = ("color", (0, 179, 164), 12)
 
@@ -25,8 +25,10 @@ def hub():
 
 
 @pytest.fixture
-def arb(strip, clock, settings, hub):
-    return Arbiter(Player(strip, clock), settings, clock, hub)
+async def arb(strip, clock, settings, hub):
+    arbiter = Arbiter(Player(strip, clock), settings, clock, hub)
+    yield arbiter
+    await arbiter.stop_steady()
 
 
 def outcomes(arb):
@@ -363,3 +365,74 @@ async def test_manual_brightness_capped_by_max_brightness(arb, settings, strip):
     arb.set_manual({"color": [255, 0, 0]}, brightness=200)
     await settle(arb)
     assert strip.calls[-1] == ("color", (255, 0, 0), 50)
+
+
+# ---- final fixes: steady sequences loop (F1) -----------------------------------
+WHITE_ON = ("color", (255, 255, 255), 255)
+
+
+async def test_webhook_start_without_look_keeps_flashing_until_cleared(arb, strip):
+    assert await arb.submit(Event("hook.alarm", "start")) == "active"
+    await settle(arb)
+    await pump()
+    assert strip.calls.count(WHITE_ON) >= 6  # white_flash is 2 flashes per pass: several passes seen
+    assert strip.calls[-1][0] == "color"  # still flashing, not left dark after one pass
+    await arb.submit(Event("hook.alarm", "clear"))
+    await settle(arb)
+    n = len(strip.calls)
+    assert strip.calls[-1] == IDLE
+    await pump()
+    assert len(strip.calls) == n  # loop stopped
+    assert arb._steady_task is None
+
+
+async def test_state_rule_with_flash_pattern_loops(arb, settings, strip):
+    rule = dict(settings.rule("internet.slow"), pattern="blue_flash")
+    settings.update({"rules": {"internet.slow": rule}})
+    await arb.submit(Event("internet.slow", "start"))
+    await settle(arb)
+    await pump()
+    assert strip.calls.count(("color", (0, 0, 255), 255)) >= 3
+
+
+async def test_higher_priority_state_preempts_looping_sequence(arb, strip):
+    await arb.submit(Event("hook.alarm", "start"))
+    await settle(arb)
+    await pump()
+    await arb.submit(Event("dns.down", "start"))
+    await arb.tick()
+    assert arb._steady_task is None
+    assert strip.calls[-3:] == [("effect", 0x67), ("speed", 5), ("brightness", 255)]
+    n = len(strip.calls)
+    await pump()
+    assert len(strip.calls) == n  # nothing more from the old loop
+
+
+async def test_oneshot_preempts_looping_sequence_then_loop_resumes(arb, strip):
+    await arb.submit(Event("hook.alarm", "start", priority="normal"))
+    await settle(arb)
+    await pump()
+    await arb.submit(Event("device.new", data={"key": "aa"}))
+    await arb.tick()
+    assert arb.snapshot()["playing"] == "device.new" and arb._steady_task is None
+    await settle(arb)
+    seq = [c for c in strip.calls if c[0] == "effect"]
+    assert seq == [("effect", 0x7F), ("effect", 0x7E)]
+    i = strip.calls.index(("effect", 0x7E))
+    await pump()
+    assert WHITE_ON in strip.calls[i:]  # back to looping the steady sequence
+    assert arb._steady_task is not None
+
+
+async def test_run_loop_shutdown_stops_steady_sequence(arb, strip):
+    task = asyncio.create_task(arb.run())
+    await arb.submit(Event("hook.alarm", "start"))
+    await pump()
+    assert arb._steady_task is not None
+    task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+    assert arb._steady_task is None
+    n = len(strip.calls)
+    await pump()
+    assert len(strip.calls) == n

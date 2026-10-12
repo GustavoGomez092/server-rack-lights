@@ -49,6 +49,7 @@ class Arbiter:
         self._dedup: dict[str, float] = {}
         self._manual: dict | None = None
         self._playing: tuple[Event, dict, asyncio.Task] | None = None
+        self._steady_task: asyncio.Task | None = None  # loops a Sequence used as the base look
         self._rendered_key: tuple | None = None
         self._seq = 0
         self._wake = asyncio.Event()
@@ -125,17 +126,27 @@ class Arbiter:
         }
 
     async def run(self) -> None:
-        while True:
-            try:
-                await self.tick()
-            except Exception:
-                log.exception("arbiter tick failed")
-                self._rendered_key = None
-            try:
-                await asyncio.wait_for(self._wake.wait(), 1.0)
-            except TimeoutError:
-                pass
-            self._wake.clear()
+        try:
+            while True:
+                try:
+                    await self.tick()
+                except Exception:
+                    log.exception("arbiter tick failed")
+                    self._rendered_key = None
+                try:
+                    await asyncio.wait_for(self._wake.wait(), 1.0)
+                except TimeoutError:
+                    pass
+                self._wake.clear()
+        finally:
+            await self.stop_steady()
+
+    async def stop_steady(self) -> None:
+        """Cancel the looping base sequence (if any) and wait until it has stopped sending."""
+        task, self._steady_task = self._steady_task, None
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.wait([task])
 
     async def tick(self) -> None:
         if self._playing:
@@ -150,12 +161,18 @@ class Arbiter:
             if level is None:
                 self._log(ev, "skipped:quiet")
                 continue
+            await self.stop_steady()
             task = asyncio.create_task(self._play_oneshot(ev, rule, level))
             self._playing = (ev, rule, task)
             task.add_done_callback(lambda t, ev=ev: self._oneshot_done(t, ev))
             return
         if base.key != self._rendered_key:
-            await self.player.show(base.pattern, base.level)
+            await self.stop_steady()
+            if isinstance(base.pattern, Sequence) and base.level > 0:
+                # A sequence would end dark after one pass; as a steady look it loops until replaced.
+                self._steady_task = asyncio.create_task(self._loop_steady(base.pattern, base.level))
+            else:
+                await self.player.show(base.pattern, base.level)
             self._rendered_key = base.key
             self._set_current(base.desc, base.reason)
 
@@ -264,6 +281,14 @@ class Arbiter:
         level = 0 if night_off else round(idle["brightness"] * self.settings.data["max_brightness"] / 255)
         rgb = tuple(idle["color"])
         return Look(("idle", rgb, level), Color(rgb), level, PRIORITIES["idle"], "idle glow", "idle")
+
+    async def _loop_steady(self, pattern: Sequence, level: int) -> None:
+        while True:
+            try:
+                await self.player.show(pattern, level)
+            except Exception:
+                log.exception("steady sequence failed")
+                await self.clock.sleep(1.0)
 
     async def _play_oneshot(self, ev: Event, rule: dict, level: int) -> None:
         try:
