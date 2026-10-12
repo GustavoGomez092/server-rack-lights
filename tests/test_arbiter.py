@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 
 import pytest
 
@@ -313,3 +314,52 @@ async def test_run_loop_survives_player_errors(strip, clock, settings):
     await asyncio.sleep(0.05)
     assert not task.done()
     task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await task
+
+
+# ---- fix round 1 ----------------------------------------------------------------
+async def test_oneshot_cancelled_before_start_does_not_freeze(arb, strip):
+    await arb.submit(Event("device.new", data={"key": "a"}))
+    await arb.tick()  # task created, not yet started
+    await arb.submit(Event("internet.down", "start"))  # cancels with no yield in between
+    await settle(arb)
+    assert effects(strip)[-1] == 0x62
+    assert outcomes(arb).count(("device.new", "preempted")) == 1
+    await arb.submit(Event("ping", data={"key": "z"}))
+    await settle(arb)
+    assert arb.snapshot()["queue"] == [] and arb.snapshot()["playing"] is None
+    assert ("ping", "shown") in outcomes(arb)
+
+
+async def test_preempted_logged_once_when_started(arb, clock):
+    clock.gate = asyncio.Event()
+    await arb.submit(Event("device.new", data={"key": "x"}))
+    await arb.tick()
+    await asyncio.sleep(0)
+    await arb.submit(Event("internet.down", "start"))
+    clock.gate = None
+    await settle(arb)
+    assert outcomes(arb).count(("device.new", "preempted")) == 1
+
+
+async def test_bad_look_oneshot_rejected_and_arbiter_keeps_working(arb, strip):
+    assert await arb.submit(Event("hook.bad", look={"effect": 999})) == "rejected:invalid_look"
+    assert arb.snapshot()["queue"] == []
+    await arb.submit(Event("hello"))
+    await settle(arb)
+    assert ("color", (255, 255, 255), 255) in strip.calls
+
+
+async def test_bad_look_start_rejected_and_not_active(arb, strip):
+    assert await arb.submit(Event("ci.bad", "start", look={"effect": 999})) == "rejected:invalid_look"
+    assert arb.snapshot()["active"] == []
+    await arb.tick()
+    assert strip.calls[-1] == IDLE
+
+
+async def test_manual_brightness_capped_by_max_brightness(arb, settings, strip):
+    settings.update({"max_brightness": 50})
+    arb.set_manual({"color": [255, 0, 0]}, brightness=200)
+    await settle(arb)
+    assert strip.calls[-1] == ("color", (255, 0, 0), 50)

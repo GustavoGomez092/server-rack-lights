@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from ..events import PRIORITIES, Event
-from ..patterns import NAMED, Color, Sequence, describe, resolve
+from ..patterns import NAMED, Color, PatternError, Sequence, describe, resolve
 from .quiet import in_window
 
 log = logging.getLogger(__name__)
@@ -59,6 +59,12 @@ class Arbiter:
         return self._playing[2] if self._playing else None
 
     async def submit(self, ev: Event) -> str:
+        if ev.kind != "clear" and ev.look is not None:
+            try:
+                resolve(ev.look)
+            except PatternError:
+                self._log(ev, "rejected:invalid_look")
+                return "rejected:invalid_look"
         rule = self._rule_for(ev)
         followup = None
         if ev.kind == "clear":
@@ -88,6 +94,7 @@ class Arbiter:
             level = previous["level"]
         else:
             level = self.settings.data["max_brightness"]
+        level = min(level, self.settings.data["max_brightness"])
         self._seq += 1
         self._manual = {
             "spec": spec, "pattern": pattern, "level": level, "rev": self._seq,
@@ -145,6 +152,7 @@ class Arbiter:
                 continue
             task = asyncio.create_task(self._play_oneshot(ev, rule, level))
             self._playing = (ev, rule, task)
+            task.add_done_callback(lambda t, ev=ev: self._oneshot_done(t, ev))
             return
         if base.key != self._rendered_key:
             await self.player.show(base.pattern, base.level)
@@ -258,21 +266,23 @@ class Arbiter:
         return Look(("idle", rgb, level), Color(rgb), level, PRIORITIES["idle"], "idle glow", "idle")
 
     async def _play_oneshot(self, ev: Event, rule: dict, level: int) -> None:
-        pattern = self._pattern_of(rule)
-        self._log(ev, "shown")
-        self._set_current(self._desc_of(rule), f"{ev.name} ({ev.source})")
         try:
+            pattern = self._pattern_of(rule)
+            self._log(ev, "shown")
+            self._set_current(self._desc_of(rule), f"{ev.name} ({ev.source})")
             await self.player.show(pattern, level)
             if not isinstance(pattern, Sequence):
                 await self.clock.sleep(rule.get("duration_s") or ev.duration_s or DEFAULT_ONESHOT_S)
-        except asyncio.CancelledError:
-            self._log(ev, "preempted")
         except Exception:
             log.exception("one-shot %s failed", ev.name)
-        finally:
-            self._playing = None
-            self._rendered_key = None
-            self._wake.set()
+
+    def _oneshot_done(self, task: asyncio.Task, ev: Event) -> None:
+        """Runs even if the task was cancelled before it ever started."""
+        if task.cancelled():
+            self._log(ev, "preempted")
+        self._playing = None
+        self._rendered_key = None
+        self._wake.set()
 
     def _log(self, ev: Event, outcome: str) -> None:
         entry = {"time": self.clock.now().isoformat(timespec="seconds"), "name": ev.name, "kind": ev.kind,
