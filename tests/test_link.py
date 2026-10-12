@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from led_notify.driver.link import StripLink
+from led_notify.driver.link import StripLink, bluez_device_path
 
 
 class FakeClient:
@@ -65,6 +65,10 @@ def make_factory(fail_first=0):
     return factory, made
 
 
+async def noop_release(address):
+    pass
+
+
 async def spin(n=40):
     for _ in range(n):
         await asyncio.sleep(0)
@@ -85,7 +89,7 @@ async def running():
 
 async def test_offline_strip_never_raises_and_reports_error(clock, running):
     factory, made = make_factory(fail_first=1000)
-    link = StripLink("A6:15:50:62:0A:9D", clock, strip_factory=factory)
+    link = StripLink("A6:15:50:62:0A:9D", clock, strip_factory=factory, release=noop_release)
     running(link)
     await spin()
     await link.power(True)
@@ -97,7 +101,7 @@ async def test_offline_strip_never_raises_and_reports_error(clock, running):
 
 async def test_connects_after_retries_and_replays_desired_state(clock, running):
     factory, made = make_factory(fail_first=2)
-    link = StripLink("AA", clock, strip_factory=factory)
+    link = StripLink("AA", clock, strip_factory=factory, release=noop_release)
     await link.power(True)
     await link.effect(0x62)
     await link.speed(5)
@@ -111,7 +115,7 @@ async def test_connects_after_retries_and_replays_desired_state(clock, running):
 
 async def test_commands_go_to_connected_strip(clock, running):
     factory, made = make_factory()
-    link = StripLink("AA", clock, strip_factory=factory)
+    link = StripLink("AA", clock, strip_factory=factory, release=noop_release)
     running(link)
     await spin()
     await link.color(9, 8, 7, 50)
@@ -120,7 +124,7 @@ async def test_commands_go_to_connected_strip(clock, running):
 
 async def test_reconnects_when_link_drops_and_replays(clock, running):
     factory, made = make_factory()
-    link = StripLink("AA", clock, strip_factory=factory)
+    link = StripLink("AA", clock, strip_factory=factory, release=noop_release)
     running(link)
     await spin()
     await link.color(1, 1, 1, 10)
@@ -138,7 +142,7 @@ async def test_write_failure_triggers_reconnect(clock, running):
         seen.append(link.status()["last_error"])  # error visible during the reconnect cycle
         return factory(address)
 
-    link = StripLink("AA", clock, strip_factory=spying_factory)
+    link = StripLink("AA", clock, strip_factory=spying_factory, release=noop_release)
     running(link)
     await spin()
     made[-1].raise_on_write = True
@@ -151,7 +155,7 @@ async def test_write_failure_triggers_reconnect(clock, running):
 
 async def test_keepalive_queries_status(clock, running):
     factory, made = make_factory()
-    link = StripLink("AA", clock, strip_factory=factory, keepalive_s=5)
+    link = StripLink("AA", clock, strip_factory=factory, keepalive_s=5, release=noop_release)
     running(link)
     await spin(60)
     assert ("status",) in made[-1].calls
@@ -171,7 +175,7 @@ async def test_command_during_replay_is_not_overwritten_by_stale_state(clock, ru
         made.append(s)
         return s
 
-    link = StripLink("AA", clock, strip_factory=factory)
+    link = StripLink("AA", clock, strip_factory=factory, release=noop_release)
     await link.power(True)
     await link.effect(1)
     running(link)
@@ -184,3 +188,83 @@ async def test_command_during_replay_is_not_overwritten_by_stale_state(clock, ru
     await spin()
     effects = [c for c in made[0].calls if c[0] == "effect"]
     assert effects and effects[-1] == ("effect", 2)
+
+
+# ---- final fixes: stale BlueZ connection (F2) -----------------------------------
+class Releaser:
+    def __init__(self, fail=False):
+        self.calls = []
+        self.fail = fail
+
+    async def __call__(self, address):
+        self.calls.append(address)
+        if self.fail:
+            raise RuntimeError("dbus unavailable")
+
+
+async def test_releases_stale_connection_once_at_startup_before_scanning(clock, running):
+    order = []
+    release = Releaser()
+    factory, made = make_factory()
+
+    def spying_factory(address):
+        order.append(("factory", len(release.calls)))
+        return factory(address)
+
+    link = StripLink("A6:15:50:62:0A:9D", clock, strip_factory=spying_factory, release=release)
+    running(link)
+    await spin()
+    assert release.calls == ["A6:15:50:62:0A:9D"]
+    assert order[0] == ("factory", 1)  # release ran before the first scan
+    assert link.status()["connected"] is True
+
+
+async def test_device_not_found_releases_stale_link_then_connects(clock, running):
+    release = Releaser()
+    made = []
+
+    def factory(address):
+        # BlueZ still holds the old link (strip not advertising) until a release after a failed scan
+        s = FakeBleStrip(fail=len(release.calls) < 2)
+        made.append(s)
+        return s
+
+    link = StripLink("AA", clock, strip_factory=factory, release=release)
+    running(link)
+    await spin()
+    assert len(release.calls) == 2  # startup + after the first "Device not found"
+    assert len(made) == 2 and link.status()["connected"] is True
+
+
+async def test_release_errors_are_ignored(clock, running):
+    release = Releaser(fail=True)
+    factory, made = make_factory(fail_first=1)
+    link = StripLink("AA", clock, strip_factory=factory, release=release)
+    running(link)
+    await spin()
+    assert len(release.calls) == 2 and link.status()["connected"] is True
+
+
+async def test_other_connect_errors_do_not_release(clock, running):
+    release = Releaser()
+    made = []
+
+    class Flaky(FakeBleStrip):
+        async def connect(self):
+            if len(made) == 1:
+                raise OSError("le-connection-abort-by-local")
+            await super().connect()
+
+    def factory(address):
+        s = Flaky(fail=False)
+        made.append(s)
+        return s
+
+    link = StripLink("AA", clock, strip_factory=factory, release=release)
+    running(link)
+    await spin()
+    assert len(release.calls) == 1 and link.status()["connected"] is True
+
+
+def test_bluez_device_path():
+    assert bluez_device_path("a6:15:50:62:0a:9d") == "/org/bluez/hci0/dev_A6_15_50_62_0A_9D"
