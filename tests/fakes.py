@@ -38,3 +38,15 @@ class FakeClock:
             await self.gate.wait()
         self._mono += seconds
         await asyncio.sleep(0)
+
+
+async def settle(arbiter, rounds: int = 20) -> None:
+    """Run arbiter ticks until queued one-shots have played (FakeClock makes them instant)."""
+    for _ in range(rounds):
+        await arbiter.tick()
+        task = arbiter.playing_task
+        if task is not None:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
