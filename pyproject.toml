@@ -1,0 +1,30 @@
+[project]
+name = "led-notify"
+version = "0.1.0"
+description = "Homelab notifications on a BanlanX BLE LED strip"
+requires-python = ">=3.12"
+dependencies = [
+  "bleak>=0.22",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "httpx>=0.27",
+  "dnspython>=2.6",
+  "tzdata>=2024.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["led_notify*"]
+
+[tool.setuptools.package-data]
+led_notify = ["web/static/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
