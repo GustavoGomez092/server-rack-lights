@@ -12,6 +12,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from ..audio.library import SoundError
+from ..audio.refs import CUSTOM_PREFIX
 from ..events import Event
 from ..patterns import LOOK_KEYS, PatternError, catalog, resolve
 from ..store.settings import SettingsError
@@ -26,6 +28,7 @@ class Services:
     link: Any
     hub: Any
     clock: Any
+    audio: Any = None
 
 
 class LookIn(BaseModel):
@@ -49,10 +52,16 @@ class EventIn(LookIn):
     priority: Literal["low", "normal", "high", "critical"] | None = None
     duration: float | None = None
     data: dict = Field(default_factory=dict)
+    sound: str | None = None
 
 
 class PreviewIn(LookIn):
     duration: float = 8.0
+    sound: str | None = None
+
+
+class SoundPlayIn(BaseModel):
+    sound: str
 
 
 class StripIn(LookIn):
@@ -72,7 +81,8 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
     def state() -> dict:
         warnings = [w for w in (svc.settings.warning, svc.devices.warning) if w]
         return {**svc.arbiter.snapshot(), "strip": svc.link.status(),
-                "monitors": svc.supervisor.health if svc.supervisor else {}, "warnings": warnings}
+                "monitors": svc.supervisor.health if svc.supervisor else {}, "warnings": warnings,
+                "audio": svc.audio.status() if svc.audio else None}
 
     def make_event(**kwargs) -> Event:
         try:
@@ -83,11 +93,19 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
     async def submit(ev: Event) -> dict:
         return {"accepted": True, "outcome": await svc.arbiter.submit(ev)}
 
+    def check_sound(ref: str | None) -> None:
+        if ref in (None, ""):
+            return
+        if svc.audio is None or not svc.audio.library.exists(ref):
+            raise HTTPException(422, f"unknown sound {ref!r}")
+
     @app.post("/api/events", dependencies=[Depends(require_token)])
     async def post_event(body: EventIn):
         spec = body.spec()
+        check_sound(body.sound)
         return await submit(make_event(name=body.name, kind=body.kind, source="webhook", priority=body.priority,
-                                       look=spec or None, duration_s=body.duration, data=body.data))
+                                       look=spec or None, duration_s=body.duration, data=body.data,
+                                       sound=body.sound))
 
     @app.post("/api/test/{name}")
     async def test_event(name: str, force: bool = False):
@@ -100,8 +118,9 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
         spec = body.spec()
         if not spec:
             raise HTTPException(422, "give one of pattern, effect, color")
+        check_sound(body.sound)
         return await submit(make_event(name="preview", kind="oneshot", source="test", look=spec,
-                                       duration_s=body.duration, force=True))
+                                       duration_s=body.duration, force=True, sound=body.sound or ""))
 
     @app.get("/api/state")
     async def get_state():
@@ -129,6 +148,9 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
 
     @app.put("/api/rules")
     async def put_rules(body: dict = Body(...)):
+        for rule in body.values() if isinstance(body, dict) else []:
+            if isinstance(rule, dict) and isinstance(rule.get("sound"), str) and rule["sound"].startswith(CUSTOM_PREFIX):
+                check_sound(rule["sound"])
         try:
             svc.settings.update({"rules": body})
         except SettingsError as e:
@@ -177,6 +199,37 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
     @app.get("/api/log")
     async def get_log():
         return list(svc.arbiter.log)
+
+    @app.get("/api/sounds")
+    async def list_sounds():
+        return svc.audio.library.list() if svc.audio else []
+
+    @app.put("/api/sounds/{name}")
+    async def upload_sound(name: str, request: Request):
+        if svc.audio is None:
+            raise HTTPException(404, "audio is not available")
+        data = await request.body()
+        try:
+            return svc.audio.library.import_upload(name, data, request.headers.get("content-type", ""))
+        except SoundError as e:
+            raise HTTPException(422, str(e))
+
+    @app.delete("/api/sounds/{name}")
+    async def delete_sound(name: str):
+        if svc.audio is None or not svc.audio.library.delete(name):
+            raise HTTPException(404, "unknown sound")
+        ref = CUSTOM_PREFIX + name
+        reset = sorted(n for n, r in svc.settings.data["rules"].items() if r.get("sound") == ref)
+        if reset:
+            svc.settings.update({"rules": {n: {"sound": "default"} for n in reset}})
+        return {"deleted": name, "rules_reset": reset}
+
+    @app.post("/api/sounds/play")
+    async def play_sound(body: SoundPlayIn):
+        if svc.audio is None or not svc.audio.library.exists(body.sound):
+            raise HTTPException(404, "unknown sound")
+        svc.audio.chime(body.sound, svc.settings.data["audio"]["volume_pct"])
+        return {"playing": body.sound}
 
     @app.get("/api/stream")
     async def stream(request: Request):

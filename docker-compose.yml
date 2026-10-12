@@ -15,6 +15,7 @@ services:
     cap_add: [NET_RAW, NET_ADMIN, SYS_RAWIO, SYS_ADMIN]
     devices:
       - /dev/nvme0:/dev/nvme0
+      - /dev/snd:/dev/snd
     environment:
       STRIP_ADDRESS: "A6:15:50:62:0A:9D"
       TZ: America/Los_Angeles

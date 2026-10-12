@@ -1,6 +1,12 @@
+import array
+import io
+import wave
+
 import pytest
 from fastapi.testclient import TestClient
 
+from led_notify.audio.fake import FakeChimes
+from led_notify.audio.library import SoundLibrary
 from led_notify.driver.fake import FakeStrip
 from led_notify.engine.arbiter import Arbiter
 from led_notify.engine.player import Player
@@ -18,9 +24,10 @@ def svc(tmp_path):
     settings = SettingsStore(tmp_path / "settings.json", hub)
     devices = DeviceStore(tmp_path / "devices.json", hub)
     strip = FakeStrip()
-    arbiter = Arbiter(Player(strip, clock), settings, clock, hub)
+    audio = FakeChimes(SoundLibrary(tmp_path))
+    arbiter = Arbiter(Player(strip, clock), settings, clock, hub, chimes=audio)
     return Services(arbiter=arbiter, settings=settings, devices=devices, supervisor=None, link=strip,
-                    hub=hub, clock=clock)
+                    hub=hub, clock=clock, audio=audio)
 
 
 @pytest.fixture
@@ -192,3 +199,60 @@ def test_stream_sends_state_then_forwards_log_but_not_settings(svc):
     assert "current" in json.loads(first.split("data: ", 1)[1])
     assert second.startswith("event: log\n") and '"hello"' in second  # settings message skipped
     assert not svc.hub._subs  # unsubscribed on close
+
+
+def wav_bytes(seconds=0.5) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(array.array("h", [0] * int(8000 * seconds)).tobytes())
+    return buf.getvalue()
+
+
+def test_sounds_list_has_builtins(client):
+    refs = [s["ref"] for s in client.get("/api/sounds").json()]
+    assert refs[:3] == ["default", "success", "error"]
+
+
+def test_upload_play_and_delete_sound(client, svc):
+    r = client.put("/api/sounds/Door Bell.wav", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
+    assert r.status_code == 200 and r.json()["ref"] == "custom:door-bell"
+    assert client.post("/api/sounds/play", json={"sound": "custom:door-bell"}).status_code == 200
+    assert svc.audio.chimes[-1] == ("custom:door-bell", 70)
+    assert client.post("/api/sounds/play", json={"sound": "custom:nope"}).status_code == 404
+    assert client.delete("/api/sounds/door-bell").status_code == 200
+    assert client.delete("/api/sounds/door-bell").status_code == 404
+
+
+def test_upload_rejections_are_422(client):
+    assert client.put("/api/sounds/x.wav", content=b"junk", headers={"Content-Type": "audio/wav"}).status_code == 422
+    assert client.put("/api/sounds/default.wav", content=wav_bytes(),
+                      headers={"Content-Type": "audio/wav"}).status_code == 422
+    assert client.put("/api/sounds/x.png", content=wav_bytes(),
+                      headers={"Content-Type": "image/png"}).status_code == 422
+
+
+def test_delete_sound_resets_rules_using_it(client, svc):
+    client.put("/api/sounds/beep.wav", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
+    assert client.put("/api/rules", json={"cpu.hot": {"sound": "custom:beep"}}).status_code == 200
+    r = client.delete("/api/sounds/beep")
+    assert r.json()["rules_reset"] == ["cpu.hot"]
+    assert svc.settings.rule("cpu.hot")["sound"] == "default"
+
+
+def test_rules_reject_unknown_custom_sound(client):
+    assert client.put("/api/rules", json={"cpu.hot": {"sound": "custom:missing"}}).status_code == 422
+    assert client.put("/api/rules", json={"cpu.hot": {"sound": None}}).status_code == 200
+
+
+def test_webhook_sound_validation(client):
+    assert client.post("/api/events", json={"name": "a", "sound": "success"}).status_code == 200
+    assert client.post("/api/events", json={"name": "b", "sound": ""}).status_code == 200
+    assert client.post("/api/events", json={"name": "c", "sound": "custom:missing"}).status_code == 422
+    assert client.post("/api/events", json={"name": "d", "sound": "nope"}).status_code == 422
+
+
+def test_state_includes_audio_status(client):
+    assert client.get("/api/state").json()["audio"] == {"fake": True}
