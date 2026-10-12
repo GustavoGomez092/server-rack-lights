@@ -74,7 +74,7 @@ The **Arbiter** decides, so sound follows the light exactly:
 - **Persistent state**: the first time it becomes the displayed look. Not again while it stays active;
   not if it was hidden by a higher-priority state the whole time it was active.
 - **Recovery**: via the clear's follow-up one-shot (e.g. `internet.up` → `success`).
-- **Test / Force / preview**: always chime (they are forced looks), at day volume.
+- **Test / Force**: always chime (forced looks), at day volume. Gallery pattern previews are silent unless the preview request names a `sound`; sounds are previewed with their own ▶ button.
 - **Quiet hours**: only rules with priority `critical` chime, at `night_volume_pct`; everything else
   is silent at night regardless of its light behaviour.
 - **Manual mode** and the idle look never chime.
@@ -92,7 +92,7 @@ The arbiter hands `(sound_ref, volume_pct)` to an `AudioPlayer`; it never awaits
 | Arbiter changes | pick the chime per §5 and call `audio.play(ref, volume)` |
 | API | `GET /api/sounds`; `PUT /api/sounds/{name}` (raw file body, `Content-Type` audio/wav or audio/mpeg); `DELETE /api/sounds/{name}`; `POST /api/sounds/{ref}/play` (preview at day volume); `sound` on `/api/events` and `/api/preview`; audio status in `/api/state` |
 | UI | Rules table gains a **Sound** column (select + ▶ preview); Settings gains an **Audio** box (enabled, volume, night volume, upload, list with delete) |
-| Container | `alsa-utils`, `mpg123` in the image; compose adds `/dev/snd` device and `group_add: [audio]` |
+| Container | `alsa-utils`, `mpg123` in the image; compose adds the `/dev/snd` device (the container runs as root, so no extra group is needed) |
 
 ## 7. Error handling
 
