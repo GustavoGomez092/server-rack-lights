@@ -68,6 +68,9 @@ function renderState(s) {
     || '<span class="muted">none</span>';
   $("#manual-status").textContent = s.manual ? `Manual: ${s.manual.desc} · ${Math.ceil(s.manual.expires_in_s / 60)} min left` : "Automatic";
   $("#quiet").hidden = !s.quiet;
+  const audioErr = (s.audio && s.audio.last_error) || "";
+  $("#audio").hidden = !audioErr;   // only shown when the last chime failed
+  $("#audio").title = audioErr;     // a DOM property, so no HTML escaping is needed
   $("#warnings").innerHTML = (s.warnings || []).map((w) => `<div class="warn">${esc(w)}</div>`).join("");
 }
 const loadState = () => api("GET", "/api/state").then(renderState).catch(() => {});

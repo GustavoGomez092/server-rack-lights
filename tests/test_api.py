@@ -254,6 +254,11 @@ def test_webhook_sound_validation(client):
     assert client.post("/api/events", json={"name": "d", "sound": "nope"}).status_code == 422
 
 
+def test_ui_has_hidden_audio_error_pill(client):
+    assert '<span id="audio" class="pill bad" hidden>audio error</span>' in client.get("/").text
+    assert "last_error" in client.get("/app.js").text
+
+
 def test_state_includes_audio_status(client):
     assert client.get("/api/state").json()["audio"] == {"fake": True}
 
