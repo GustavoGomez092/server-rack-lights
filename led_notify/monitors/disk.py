@@ -30,11 +30,22 @@ def parse_smart(text: str) -> bool | None:
     return None
 
 
+SMART_TIMEOUT_S = 30.0
+
+
 async def smart_health(device: str) -> bool | None:
-    proc = await asyncio.create_subprocess_exec(
-        "smartctl", "-H", device, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-    )
-    out, _ = await proc.communicate()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "smartctl", "-H", device, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("smartctl not found on PATH") from exc
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), SMART_TIMEOUT_S)
+    except asyncio.TimeoutError as exc:
+        proc.kill()
+        await proc.wait()
+        raise RuntimeError(f"smartctl timed out on {device}") from exc
     return parse_smart(out.decode(errors="replace"))
 
 
@@ -56,8 +67,8 @@ class DiskMonitor(PollingMonitor):
         events = self.check_usage()
         now = self.clock.monotonic()
         if self._last_smart is None or now - self._last_smart >= self.cfg["smart_interval_s"]:
-            self._last_smart = now
             events += await self.check_smart()
+            self._last_smart = now
         return events
 
     def check_usage(self) -> list[Event]:
@@ -70,8 +81,9 @@ class DiskMonitor(PollingMonitor):
         devices = self.cfg["smart_devices"]
         if not devices:
             return []
-        verdicts = [v for v in [await self.smart(d) for d in devices] if v is not None]
-        if not verdicts:
-            raise RuntimeError("smartctl returned no health verdict (check device access)")
-        change = self.smart_bad.feed(all(verdicts), 1, 1)
+        results = [(d, await self.smart(d)) for d in devices]
+        failed = [d for d, verdict in results if verdict is None]
+        if failed:
+            raise RuntimeError(f"smartctl returned no health verdict for {', '.join(failed)} (check device access)")
+        change = self.smart_bad.feed(all(verdict for _, verdict in results), 1, 1)
         return [Event("disk.smart_error", change, source=self.name)] if change else []

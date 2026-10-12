@@ -93,3 +93,80 @@ async def test_cpu_hot_after_two_minutes_and_clears_below_75(settings, clock):
     assert names(evs) == [("cpu.hot", "start")] and evs[0].data == {"temp_c": 86.0}
     temps[0] = 74.0
     assert names(await m.check()) == [("cpu.hot", "clear")]
+
+
+# ---- disk fix round 1 -------------------------------------------------------------
+import asyncio
+
+from led_notify.monitors import disk
+
+
+async def test_failed_smart_probe_is_retried_on_next_check(settings, clock):
+    calls = []
+
+    async def smart(device):
+        calls.append(device)
+        if len(calls) == 1:
+            raise RuntimeError("smartctl missing")
+        return True
+
+    m = DiskMonitor(settings, clock, usage=lambda p: 10.0, smart=smart)
+    with pytest.raises(RuntimeError, match="smartctl missing"):
+        await m.check()
+    clock.advance(300)
+    assert await m.check() == []
+    assert len(calls) == 2
+
+
+async def test_one_unreadable_device_is_a_monitor_error(settings, clock):
+    settings.update({"disk": {"smart_devices": ["/dev/a", "/dev/b"]}})
+
+    async def smart(device):
+        return True if device == "/dev/a" else None
+
+    m = DiskMonitor(settings, clock, usage=lambda p: 10.0, smart=smart)
+    with pytest.raises(RuntimeError, match="/dev/b"):
+        await m.check()
+
+
+class FakeProc:
+    def __init__(self, out=b"", hang=False):
+        self.out, self.hang, self.killed = out, hang, False
+
+    async def communicate(self):
+        if self.hang:
+            await asyncio.sleep(3600)
+        return self.out, None
+
+    def kill(self):
+        self.killed = True
+
+    async def wait(self):
+        return 0
+
+
+async def test_smart_health_parses_output(monkeypatch):
+    async def spawn(*args, **kwargs):
+        return FakeProc(b"SMART overall-health self-assessment test result: PASSED\n")
+    monkeypatch.setattr(disk.asyncio, "create_subprocess_exec", spawn)
+    assert await disk.smart_health("/dev/nvme0") is True
+
+
+async def test_smart_health_missing_binary_is_runtime_error(monkeypatch):
+    async def spawn(*args, **kwargs):
+        raise FileNotFoundError("smartctl")
+    monkeypatch.setattr(disk.asyncio, "create_subprocess_exec", spawn)
+    with pytest.raises(RuntimeError, match="smartctl not found"):
+        await disk.smart_health("/dev/nvme0")
+
+
+async def test_smart_health_timeout_kills_process(monkeypatch):
+    proc = FakeProc(hang=True)
+
+    async def spawn(*args, **kwargs):
+        return proc
+    monkeypatch.setattr(disk.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(disk, "SMART_TIMEOUT_S", 0.01)
+    with pytest.raises(RuntimeError, match="smartctl timed out on /dev/nvme0"):
+        await disk.smart_health("/dev/nvme0")
+    assert proc.killed
