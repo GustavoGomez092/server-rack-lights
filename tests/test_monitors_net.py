@@ -88,7 +88,7 @@ async def test_internet_down_after_three_failed_rounds_and_up_after_two(settings
 
 
 async def test_internet_down_records_reachable_gateway(settings, clock):
-    m = InternetMonitor(settings, clock, ping=pinger({"192.168.0.1": 1.0}))
+    m = InternetMonitor(settings, clock, ping=pinger({"192.168.4.1": 1.0}))
     for _ in range(2):
         await m.check()
     assert (await m.check())[0].data == {"gateway_reachable": True}

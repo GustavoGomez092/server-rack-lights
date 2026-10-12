@@ -39,7 +39,7 @@ DEFAULT_SETTINGS = {
     "webhook_token": "",
     "idle": {"mode": "glow", "color": [0, 179, 164], "brightness": 12, "breath_color": "cyan", "breath_speed": 3},
     "quiet_hours": {"enabled": True, "start": "23:00", "end": "07:00", "brightness_pct": 20, "idle_off": True},
-    "internet": {"targets": ["1.1.1.1", "8.8.8.8", "9.9.9.9"], "gateway": "192.168.0.1", "interval_s": 10,
+    "internet": {"targets": ["1.1.1.1", "8.8.8.8", "9.9.9.9"], "gateway": "192.168.4.1", "interval_s": 10,
                  "fail_rounds": 3, "ok_rounds": 2, "slow_rtt_ms": 150, "slow_loss_pct": 20, "slow_window_s": 300},
     "dns": {"server": "127.0.0.1", "query": "cloudflare.com", "interval_s": 30, "fail_rounds": 3, "ok_rounds": 2},
     "devices": {"interface": "eth0", "interval_s": 60, "late_start": "00:00", "late_end": "06:00",

@@ -2,8 +2,8 @@
 
 Homelab notifications on a BanlanX SP548E Bluetooth LED strip, running as a ZimaOS app.
 
-- UI: http://192.168.0.61:8787
-- Webhook: `curl -X POST http://192.168.0.61:8787/api/events -H 'Content-Type: application/json' -d '{"name":"backup.done","pattern":"green_flash"}'`
+- UI: http://192.168.4.61:8787
+- Webhook: `curl -X POST http://192.168.4.61:8787/api/events -H 'Content-Type: application/json' -d '{"name":"backup.done","pattern":"green_flash"}'`
   - optional: `"kind": "start" | "clear"` for persistent states, `"priority": "low|normal|high|critical"`,
     `"effect": 1-146` or `"color": [r,g,b]` instead of `"pattern"`, `"duration": seconds`
   - if a webhook token is set in the UI, add `-H 'Authorization: Bearer <token>'`
@@ -20,7 +20,7 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e '.[de
 
 ```bash
 ./deploy.sh                                              # sync, build on the server, (re)start
-.venv/bin/python -m led_notify.smoke --url http://192.168.0.61:8787   # watch every pattern
+.venv/bin/python -m led_notify.smoke --url http://192.168.4.61:8787   # watch every pattern
 ```
 
 The strip accepts one Bluetooth connection: while the service runs, the BanlanX phone app can't connect.
