@@ -28,6 +28,11 @@ def client(svc):
     return TestClient(create_app(svc))
 
 
+def test_icon_served(client):
+    r = client.get("/icon.svg")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
+
+
 # ---- events webhook ----------------------------------------------------------------
 def test_post_event(client, svc):
     r = client.post("/api/events", json={"name": "backup.done", "pattern": "green_flash"})

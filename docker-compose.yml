@@ -30,7 +30,7 @@ services:
         source: /DATA/AppData/led-notify/data
         target: /data
     labels:
-      icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/wled.png
+      icon: http://192.168.0.61:8787/icon.svg
 x-casaos:
   main: led-notify
   index: /
@@ -39,7 +39,7 @@ x-casaos:
   author: gustavogomez092
   category: Utilities
   architectures: [amd64]
-  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/wled.png
+  icon: http://192.168.0.61:8787/icon.svg
   title:
     en_us: LED Notify
   tagline:
