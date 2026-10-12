@@ -27,7 +27,7 @@ def test_builtins_are_bundled_and_listed(lib):
     items = {i["ref"]: i for i in lib.list()}
     assert set(items) == {"default", "success", "error"}
     assert all(i["builtin"] for i in items.values())
-    assert 2.0 < items["default"]["duration_s"] < 2.3
+    assert 4.9 < items["default"]["duration_s"] < 5.2
     assert 0.9 < items["error"]["duration_s"] < 1.3
     assert lib.exists("success") and lib.resolve("success").name == "success.wav"
 
