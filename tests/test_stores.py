@@ -154,3 +154,63 @@ def test_device_store_bad_shape_starts_empty(tmp_path):
     p.write_text(json.dumps([1, 2]))
     d = DeviceStore(p)
     assert d.all() == [] and d.warning
+
+
+# ---- fix round 1: bad files are preserved, memory follows disk -------------
+def _assert_moved_aside(path, warning):
+    backups = list(path.parent.glob(f"{path.name}.corrupt-*"))
+    assert len(backups) == 1
+    assert not path.exists()
+    assert backups[0].name in warning
+
+
+def test_invalid_settings_file_is_moved_aside(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"max_brightness": 999}))
+    s = SettingsStore(p)
+    assert s.data == DEFAULT_SETTINGS and "invalid" in s.warning
+    _assert_moved_aside(p, s.warning)
+
+
+def test_non_object_settings_file_is_moved_aside(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps([1, 2]))
+    s = SettingsStore(p)
+    assert s.data == DEFAULT_SETTINGS and s.warning
+    _assert_moved_aside(p, s.warning)
+
+
+def test_wrong_shape_devices_file_is_moved_aside(tmp_path):
+    p = tmp_path / "d.json"
+    p.write_text(json.dumps({"devices": []}))
+    d = DeviceStore(p)
+    assert d.all() == [] and d.warning
+    _assert_moved_aside(p, d.warning)
+
+
+def test_failed_settings_save_leaves_memory_unchanged(settings, monkeypatch):
+    before = copy.deepcopy(settings.data)
+
+    def boom(path, data):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("led_notify.store.settings.save_json", boom)
+    with pytest.raises(OSError):
+        settings.update({"max_brightness": 128})
+    assert settings.data == before
+
+
+def test_failed_device_save_leaves_memory_unchanged(tmp_path, monkeypatch):
+    d = DeviceStore(tmp_path / "d.json")
+    d.upsert(rec("aa:00:00:00:00:01"))
+    before = copy.deepcopy(d.all())
+
+    def boom(path, data):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("led_notify.store.devices.save_json", boom)
+    with pytest.raises(OSError):
+        d.patch("aa:00:00:00:00:01", {"name": "new"})
+    with pytest.raises(OSError):
+        d.delete("aa:00:00:00:00:01")
+    assert d.all() == before

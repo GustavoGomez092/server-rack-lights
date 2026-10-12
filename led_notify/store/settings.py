@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..events import RULE_PRIORITIES
 from ..patterns import NAMED
-from .jsonfile import load_json, save_json
+from .jsonfile import load_json, move_aside, save_json
 
 
 def _rule(priority, pattern, kind, duration_s=None, clear_followup=None):
@@ -173,11 +173,16 @@ class SettingsStore:
         self.path = Path(path)
         self.hub = hub
         stored, self.warning = load_json(self.path, {})
-        data = deep_merge(copy.deepcopy(DEFAULT_SETTINGS), stored if isinstance(stored, dict) else {})
+        if self.warning is None and not isinstance(stored, dict):
+            backup = move_aside(self.path)
+            self.warning = f"settings.json was not an object; saved as {backup}, using defaults"
+            stored = {}
+        data = deep_merge(copy.deepcopy(DEFAULT_SETTINGS), stored)
         try:
             validate(data)
         except SettingsError as e:
-            self.warning = f"settings.json is invalid ({e}); using defaults"
+            backup = move_aside(self.path)
+            self.warning = f"settings.json is invalid ({e}); saved as {backup}, using defaults"
             data = copy.deepcopy(DEFAULT_SETTINGS)
         self._data = data
 
@@ -204,7 +209,7 @@ class SettingsStore:
         _drop_secret_placeholders(patch)
         candidate = deep_merge(copy.deepcopy(self._data), patch)
         validate(candidate)
+        save_json(self.path, candidate)  # persist first; memory changes only if the save succeeds
         self._data = candidate
-        save_json(self.path, candidate)
         if self.hub:
             self.hub.publish("settings", None)

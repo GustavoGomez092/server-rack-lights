@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .jsonfile import load_json, save_json
+from .jsonfile import load_json, move_aside, save_json
 
 PATCHABLE = {"name": str, "known": bool, "announce_arrival": bool}
 EMPTY = {"baseline_done": False, "devices": {}}
@@ -14,9 +14,10 @@ class DeviceStore:
         self.path = Path(path)
         self.hub = hub
         raw, self.warning = load_json(self.path, EMPTY)
-        if not isinstance(raw, dict) or not isinstance(raw.get("devices"), dict):
+        if self.warning is None and not (isinstance(raw, dict) and isinstance(raw.get("devices"), dict)):
+            backup = move_aside(self.path)
+            self.warning = f"devices.json had an unexpected shape; saved as {backup}, starting empty"
             raw = {"baseline_done": False, "devices": {}}
-            self.warning = self.warning or "devices.json had an unexpected shape; starting empty"
         self._raw = raw
 
     @property
@@ -47,17 +48,28 @@ class DeviceStore:
                 raise ValueError(f"{k}: not editable")
             if not isinstance(v, kind) or (kind is str and len(v) > 64):
                 raise ValueError(f"{k}: invalid value")
-        rec.update(fields)
-        self.save()
-        return rec
+        updated = {**rec, **fields}
+        self._commit({**self._raw, "devices": {**self._raw["devices"], mac.lower(): updated}})
+        return updated
 
     def delete(self, mac: str) -> bool:
-        existed = self._raw["devices"].pop(mac.lower(), None) is not None
-        if existed:
-            self.save()
-        return existed
+        key = mac.lower()
+        if key not in self._raw["devices"]:
+            return False
+        devices = {k: v for k, v in self._raw["devices"].items() if k != key}
+        self._commit({**self._raw, "devices": devices})
+        return True
 
     def save(self) -> None:
         save_json(self.path, self._raw)
+        self._publish()
+
+    def _commit(self, raw: dict) -> None:
+        """Persist the new state first; only then replace the in-memory state."""
+        save_json(self.path, raw)
+        self._raw = raw
+        self._publish()
+
+    def _publish(self) -> None:
         if self.hub:
             self.hub.publish("devices", None)
