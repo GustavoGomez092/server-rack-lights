@@ -86,6 +86,28 @@ def test_new_complete_rule_can_be_added(settings):
     assert settings.rule("backup.done") == rule
 
 
+@pytest.mark.parametrize("followup", ["bad name!", "x" * 65, 5])
+def test_invalid_clear_followup_is_rejected(settings, followup):
+    rule = dict(settings.rule("internet.down"), clear_followup=followup)
+    with pytest.raises(SettingsError, match="clear_followup"):
+        settings.update({"rules": {"internet.down": rule}})
+    assert settings.rule("internet.down")["clear_followup"] == "internet.up"
+
+
+def test_valid_or_empty_clear_followup_is_accepted(settings):
+    for followup in ("backup:done-ok_1", None, ""):
+        settings.update({"rules": {"dns.down": dict(settings.rule("dns.down"), clear_followup=followup)}})
+        assert settings.rule("dns.down")["clear_followup"] == followup
+
+
+@pytest.mark.parametrize("name", ["has space", "", "x" * 65, "bad/slash"])
+def test_invalid_rule_name_is_rejected(settings, name):
+    rule = dict(settings.rule("device.new"))
+    with pytest.raises(SettingsError, match="rule names"):
+        settings.update({"rules": {name: rule}})
+    assert name not in settings.data["rules"]
+
+
 def test_secrets_are_masked_and_placeholders_keep_them(settings):
     settings.update({"adguard": {"password": "pw"}, "webhook_token": "tok"})
     pub = settings.public()

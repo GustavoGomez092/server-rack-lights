@@ -5,7 +5,7 @@ import copy
 import re
 from pathlib import Path
 
-from ..events import RULE_PRIORITIES
+from ..events import _NAME_RE, RULE_PRIORITIES
 from ..patterns import NAMED
 from .jsonfile import load_json, move_aside, save_json
 
@@ -130,6 +130,8 @@ def _check_rules(rules) -> None:
         raise SettingsError("rules: expected an object")
     for name, r in rules.items():
         p = f"rules.{name}"
+        if not _NAME_RE.match(name):
+            raise SettingsError(f"{p}: rule names are 1-64 characters: letters, digits, '.', '_', ':' or '-'")
         if not isinstance(r, dict) or set(r) != RULE_KEYS:
             raise SettingsError(f"{p}: needs exactly {', '.join(sorted(RULE_KEYS))}")
         if not isinstance(r["enabled"], bool):
@@ -145,7 +147,8 @@ def _check_rules(rules) -> None:
             raise SettingsError(f"{p}.duration_s: must be empty or 0.5-60")
         if r["quiet_behavior"] not in ("dim", "suppress"):
             raise SettingsError(f"{p}.quiet_behavior: must be dim or suppress")
-        if r["clear_followup"] is not None and not isinstance(r["clear_followup"], str):
+        f = r["clear_followup"]
+        if f not in (None, "") and not (isinstance(f, str) and _NAME_RE.match(f)):
             raise SettingsError(f"{p}.clear_followup: must be empty or an event name")
 
 
