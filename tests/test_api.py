@@ -247,6 +247,27 @@ def test_rules_reject_unknown_custom_sound(client):
     assert client.put("/api/rules", json={"cpu.hot": {"sound": None}}).status_code == 200
 
 
+def test_missing_custom_file_does_not_block_rule_saves(client, svc, tmp_path):
+    client.put("/api/sounds/beep.wav", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
+    assert client.put("/api/rules", json={"cpu.hot": {"sound": "custom:beep"}}).status_code == 200
+    (tmp_path / "sounds" / "beep.wav").unlink()                    # removed outside the API
+    rules = client.get("/api/rules").json()                        # the UI saves the whole table
+    rules["disk.full"]["priority"] = "high"
+    assert client.put("/api/rules", json=rules).status_code == 200  # unchanged ref is not re-checked
+    assert svc.settings.rule("disk.full")["priority"] == "high"
+    assert client.put("/api/rules", json={"disk.full": {"sound": "custom:beep"}}).status_code == 422  # new ref is
+
+
+def test_delete_sound_resets_rules_even_if_file_is_gone(client, svc, tmp_path):
+    client.put("/api/sounds/beep.wav", content=wav_bytes(), headers={"Content-Type": "audio/wav"})
+    client.put("/api/rules", json={"cpu.hot": {"sound": "custom:beep"}})
+    (tmp_path / "sounds" / "beep.wav").unlink()
+    r = client.delete("/api/sounds/beep")
+    assert r.status_code == 200 and r.json()["rules_reset"] == ["cpu.hot"]
+    assert svc.settings.rule("cpu.hot")["sound"] == "default"
+    assert client.delete("/api/sounds/beep").status_code == 404   # gone and unreferenced
+
+
 def test_webhook_sound_validation(client):
     assert client.post("/api/events", json={"name": "a", "sound": "success"}).status_code == 200
     assert client.post("/api/events", json={"name": "b", "sound": ""}).status_code == 200

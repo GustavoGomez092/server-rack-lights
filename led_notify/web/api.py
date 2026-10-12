@@ -148,9 +148,12 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
 
     @app.put("/api/rules")
     async def put_rules(body: dict = Body(...)):
-        for rule in body.values() if isinstance(body, dict) else []:
+        saved = svc.settings.data["rules"]
+        for name, rule in body.items() if isinstance(body, dict) else []:
             if isinstance(rule, dict) and isinstance(rule.get("sound"), str) and rule["sound"].startswith(CUSTOM_PREFIX):
-                check_sound(rule["sound"])
+                # Only new custom refs must exist: a file removed outside the API must not block every save.
+                if (saved.get(name) or {}).get("sound") != rule["sound"]:
+                    check_sound(rule["sound"])
         try:
             svc.settings.update({"rules": body})
         except SettingsError as e:
@@ -225,10 +228,14 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
 
     @app.delete("/api/sounds/{name}")
     async def delete_sound(name: str):
-        if svc.audio is None or not svc.audio.library.delete(name):
+        if svc.audio is None:
             raise HTTPException(404, "unknown sound")
+        deleted = svc.audio.library.delete(name)
         ref = CUSTOM_PREFIX + name
+        # Rules still pointing at the sound are reset even if its file was already removed by hand.
         reset = sorted(n for n, r in svc.settings.data["rules"].items() if r.get("sound") == ref)
+        if not deleted and not reset:
+            raise HTTPException(404, "unknown sound")
         if reset:
             svc.settings.update({"rules": {n: {"sound": "default"} for n in reset}})
         return {"deleted": name, "rules_reset": reset}
