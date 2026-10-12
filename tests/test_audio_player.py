@@ -119,3 +119,81 @@ async def test_service_chime_resolves_and_enqueues(tmp_path):
 def test_fake_chimes_records():
     f = FakeChimes()
     assert f.chime("error", 30) is True and f.chimes == [("error", 30)]
+
+
+class FakeProc:
+    """Stands in for an asyncio subprocess whose wait()/communicate() block until killed."""
+
+    def __init__(self, returncode=None, hang=True):
+        self.returncode = returncode
+        self.hang = hang
+        self.killed = False
+        self._dead = asyncio.Event()
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+        self._dead.set()
+
+    async def wait(self):
+        if self.hang:
+            await self._dead.wait()
+        return self.returncode
+
+    async def communicate(self, data=None):
+        await self._dead.wait()
+        return b"", b""
+
+
+async def test_init_mixer_swallows_spawn_errors(monkeypatch):
+    from led_notify.audio import player as player_mod
+
+    async def boom(*a, **k):
+        raise PermissionError("nope")
+
+    monkeypatch.setattr(player_mod.asyncio, "create_subprocess_exec", boom)
+    await player_mod.init_mixer("plughw:1,0")      # must not raise
+
+
+async def test_init_mixer_times_out_hung_amixer_and_kills_it(monkeypatch):
+    from led_notify.audio import player as player_mod
+
+    procs = []
+
+    async def spawn(*a, **k):
+        procs.append(FakeProc())
+        return procs[-1]
+
+    monkeypatch.setattr(player_mod.asyncio, "create_subprocess_exec", spawn)
+    monkeypatch.setattr(player_mod, "MIXER_TIMEOUT_S", 0.05)
+    await asyncio.wait_for(player_mod.init_mixer("plughw:1,0"), 2)
+    assert procs and all(p.killed for p in procs)
+
+
+async def test_init_mixer_logs_nonzero_exit(monkeypatch, caplog):
+    from led_notify.audio import player as player_mod
+
+    async def spawn(*a, **k):
+        return FakeProc(returncode=1, hang=False)
+
+    monkeypatch.setattr(player_mod.asyncio, "create_subprocess_exec", spawn)
+    with caplog.at_level("WARNING"):
+        await player_mod.init_mixer("plughw:1,0")
+    assert "could not set Speaker on card 1 (exit 1)" in caplog.text
+
+
+async def test_run_aplay_kills_child_on_cancel(monkeypatch):
+    from led_notify.audio import player as player_mod
+
+    proc = FakeProc()
+
+    async def spawn(*a, **k):
+        return proc
+
+    monkeypatch.setattr(player_mod.asyncio, "create_subprocess_exec", spawn)
+    task = asyncio.create_task(player_mod.run_aplay("d", b"x", 15.0))
+    for _ in range(5):
+        await asyncio.sleep(0)
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
+    assert proc.killed

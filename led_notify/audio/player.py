@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 QUEUE_MAX = 3
 PLAY_TIMEOUT_S = 15.0
+MIXER_TIMEOUT_S = 5.0
 
 
 def scale_wav(data: bytes, volume_pct: int) -> bytes:
@@ -46,13 +47,16 @@ async def run_aplay(device: str, wav: bytes, timeout: float) -> None:
         stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
     )
     try:
-        _, err = await asyncio.wait_for(proc.communicate(wav), timeout)
-    except TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise RuntimeError(f"aplay timed out after {timeout:.0f} s")
-    if proc.returncode != 0:
-        raise RuntimeError(f"aplay failed: {err.decode(errors='replace').strip()[:200]}")
+        try:
+            _, err = await asyncio.wait_for(proc.communicate(wav), timeout)
+        except TimeoutError:
+            raise RuntimeError(f"aplay timed out after {timeout:.0f} s")
+        if proc.returncode != 0:
+            raise RuntimeError(f"aplay failed: {err.decode(errors='replace').strip()[:200]}")
+    finally:
+        if proc.returncode is None:  # timeout or cancellation: never leave aplay holding the device
+            proc.kill()
+            await proc.wait()
 
 
 async def silent_runner(device: str, wav: bytes, timeout: float) -> None:
@@ -61,19 +65,36 @@ async def silent_runner(device: str, wav: bytes, timeout: float) -> None:
 
 
 async def init_mixer(device: str) -> None:
-    """Unmute the internal speaker and set it to full; volume is applied in software per chime."""
+    """Unmute the internal speaker and set it to full; volume is applied in software per chime.
+
+    Never raises and never blocks startup for more than MIXER_TIMEOUT_S per control.
+    """
     m = re.search(r":(\d+)", device)
     card = m.group(1) if m else "0"
     for control in ("Master", "Speaker"):
+        proc = None
         try:
             proc = await asyncio.create_subprocess_exec(
                 "amixer", "-q", "-c", card, "sset", control, "100%", "unmute",
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
-            await proc.wait()
+            await asyncio.wait_for(proc.wait(), MIXER_TIMEOUT_S)
+            if proc.returncode != 0:
+                log.warning("amixer could not set %s on card %s (exit %s)", control, card, proc.returncode)
         except FileNotFoundError:
             log.warning("amixer not found; leaving mixer as is")
             return
+        except TimeoutError:
+            log.warning("amixer timed out setting %s on card %s", control, card)
+        except Exception as e:
+            log.warning("amixer failed for %s on card %s: %s: %s", control, card, type(e).__name__, e)
+        finally:
+            if proc is not None and proc.returncode is None:
+                try:
+                    proc.kill()
+                    await asyncio.wait_for(proc.wait(), MIXER_TIMEOUT_S)
+                except Exception:
+                    pass
 
 
 class AudioPlayer:
