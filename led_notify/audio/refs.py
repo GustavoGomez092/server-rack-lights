@@ -5,7 +5,7 @@ import re
 
 BUILTINS = ("default", "success", "error")
 CUSTOM_PREFIX = "custom:"
-NAME_RE = re.compile(r"^[a-z0-9_-]{1,40}$")
+NAME_RE = re.compile(r"^[a-z0-9_-]{1,40}\Z")  # \Z: unlike $, rejects a trailing newline
 
 
 def is_valid_ref(ref) -> bool:

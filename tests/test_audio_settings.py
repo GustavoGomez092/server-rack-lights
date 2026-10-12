@@ -11,6 +11,7 @@ from led_notify.store.settings import SettingsError, SettingsStore
 def test_is_valid_ref():
     assert all(is_valid_ref(r) for r in ("default", "success", "error", "custom:my-chime_1"))
     assert not any(is_valid_ref(r) for r in (None, "", "nope", "custom:", "custom:Bad Name", "custom:" + "a" * 41, 3))
+    assert is_valid_ref("custom:a\n") is False                  # no trailing newline sneaking past the regex
 
 
 def test_event_sound_validation():
