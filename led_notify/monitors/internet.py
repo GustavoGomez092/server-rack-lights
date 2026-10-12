@@ -54,16 +54,19 @@ class InternetMonitor(PollingMonitor):
         return events
 
     def _check_slow(self, t: float, rtts: list, cfg: dict) -> list[Event]:
+        if self.down.active:
+            # Outage samples must not count toward slow: judge only post-recovery data.
+            self._window.clear()
+            self._good_since = None
+            return self._end_slow()
         self._window.append((t, rtts))
         while t - self._window[0][0] > cfg["slow_window_s"]:
             self._window.popleft()
-        if self.down.active:
-            return self._end_slow()
+        samples = [r for _, rs in self._window for r in rs]
+        good = [r for r in samples if r is not None]
+        loss_pct = 100 * (len(samples) - len(good)) / len(samples)
+        median = statistics.median(good) if good else 0.0
         if not self.slow_active:
-            samples = [r for _, rs in self._window for r in rs]
-            good = [r for r in samples if r is not None]
-            loss_pct = 100 * (len(samples) - len(good)) / len(samples)
-            median = statistics.median(good) if good else 0.0
             covered = t - self._window[0][0] >= cfg["slow_window_s"] - cfg["interval_s"]
             if covered and (median > cfg["slow_rtt_ms"] or loss_pct > cfg["slow_loss_pct"]):
                 self.slow_active = True
@@ -71,8 +74,8 @@ class InternetMonitor(PollingMonitor):
                 return [Event("internet.slow", "start", source=self.name,
                               data={"median_ms": round(median, 1), "loss_pct": round(loss_pct, 1)})]
             return []
-        round_ok = all(r is not None for r in rtts) and statistics.median(rtts) <= cfg["slow_rtt_ms"]
-        if not round_ok:
+        within = median <= cfg["slow_rtt_ms"] and loss_pct <= cfg["slow_loss_pct"]
+        if not within:
             self._good_since = None
             return []
         if self._good_since is None:

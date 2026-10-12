@@ -110,7 +110,9 @@ async def test_internet_slow_after_full_window_and_clears_after_five_good_minute
     assert names(events) == [("internet.slow", "start")]
     res.update({h: 20.0 for h in TARGETS})
     events = []
-    for _ in range(30):
+    # The 200 ms samples leave the window after ~15 rounds; the window is then within limits
+    # for 5 min, so the clear lands on the 46th post-recovery round (was 31st with the old rule).
+    for _ in range(45):
         events += await m.check()
         clock.advance(10)
     assert events == []
@@ -153,3 +155,45 @@ async def test_dns_down_and_up(settings, clock):
     state["ok"] = True
     assert [names(await m.check()) for _ in range(2)] == [[], [("dns.down", "clear")]]
     assert seen[0] == ("127.0.0.1", "cloudflare.com")
+
+
+@pytest.mark.parametrize("outage_rounds", [3, 35])  # 35 > the 30-round window: the outage fills it
+async def test_outage_does_not_poison_slow_window(settings, clock, outage_rounds):
+    res = {h: 20.0 for h in TARGETS}
+    m = InternetMonitor(settings, clock, ping=pinger(res))
+    events = []
+    for _ in range(31):
+        events += await m.check()
+        clock.advance(10)
+    res.clear()
+    for _ in range(outage_rounds):
+        events += await m.check()
+        clock.advance(10)
+    assert ("internet.down", "start") in names(events)
+    res.update({h: 20.0 for h in TARGETS})
+    for _ in range(2):
+        events += await m.check()
+        clock.advance(10)
+    assert ("internet.down", "clear") in names(events)
+    for _ in range(31):
+        events += await m.check()
+        clock.advance(10)
+    assert ("internet.slow", "start") not in names(events)
+
+
+async def test_slow_clears_despite_occasional_dropped_ping(settings, clock):
+    res = {h: 200.0 for h in TARGETS}
+    m = InternetMonitor(settings, clock, ping=pinger(res))
+    events = []
+    for _ in range(31):
+        events += await m.check()
+        clock.advance(10)
+    assert names(events) == [("internet.slow", "start")]
+    res.update({h: 20.0 for h in TARGETS})
+    events = []
+    for i in range(150):
+        res["8.8.8.8"] = None if i % 10 == 0 else 20.0  # one dropped ping every 10 rounds
+        events += await m.check()
+        clock.advance(10)
+    assert ("internet.down", "start") not in names(events)
+    assert ("internet.slow", "clear") in names(events)
