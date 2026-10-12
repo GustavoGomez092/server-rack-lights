@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from ..patterns import Color, Effect, FxStep, Off, Sequence, Solid
 
+DEFAULT_SPEED = 5  # sent for effects without a speed, so they never inherit the previous one
+
 
 class Player:
     def __init__(self, strip, clock):
@@ -26,8 +28,7 @@ class Player:
             await self.strip.color(*pattern.rgb, level)
         elif isinstance(pattern, Effect):
             await self.strip.effect(pattern.fx)
-            if pattern.speed is not None:
-                await self.strip.speed(pattern.speed)
+            await self.strip.speed(DEFAULT_SPEED if pattern.speed is None else pattern.speed)
             await self.strip.brightness(level)
         elif isinstance(pattern, Sequence):
             for _ in range(pattern.repeat):

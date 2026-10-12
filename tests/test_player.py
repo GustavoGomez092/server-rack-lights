@@ -28,9 +28,10 @@ async def test_effect_sets_effect_speed_and_brightness(player, strip):
     assert strip.calls == [("power", True), ("effect", 0x62), ("speed", 5), ("brightness", 200)]
 
 
-async def test_effect_without_speed_skips_speed(player, strip):
-    await player.show(Effect(0x01), 200)
-    assert ("speed", 5) not in strip.calls and strip.calls[-1] == ("brightness", 200)
+async def test_effect_without_speed_sends_default_speed(player, strip):
+    await player.show(Effect(0x01, 2), 200)
+    await player.show(Effect(0x01), 200)  # must not inherit speed 2 from the previous effect
+    assert strip.calls[-3:] == [("effect", 0x01), ("speed", 5), ("brightness", 200)]
 
 
 async def test_level_zero_powers_off_and_next_show_powers_on(player, strip):
