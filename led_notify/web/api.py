@@ -104,11 +104,11 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
                                        duration_s=body.duration, force=True))
 
     @app.get("/api/state")
-    def get_state():
+    async def get_state():
         return state()
 
     @app.post("/api/strip")
-    def manual(body: StripIn):
+    async def manual(body: StripIn):
         spec = body.spec()
         if spec.get("effect") is not None and body.speed is not None:
             spec["speed"] = body.speed
@@ -119,16 +119,16 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
         return state()
 
     @app.delete("/api/strip/manual")
-    def resume():
+    async def resume():
         svc.arbiter.clear_manual()
         return state()
 
     @app.get("/api/rules")
-    def get_rules():
+    async def get_rules():
         return svc.settings.data["rules"]
 
     @app.put("/api/rules")
-    def put_rules(body: dict = Body(...)):
+    async def put_rules(body: dict = Body(...)):
         try:
             svc.settings.update({"rules": body})
         except SettingsError as e:
@@ -136,27 +136,27 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
         return svc.settings.data["rules"]
 
     @app.get("/api/settings")
-    def get_settings():
+    async def get_settings():
         return {k: v for k, v in svc.settings.public().items() if k != "rules"}
 
     @app.put("/api/settings")
-    def put_settings(body: dict = Body(...)):
+    async def put_settings(body: dict = Body(...)):
         if "rules" in body:
             raise HTTPException(422, "edit rules with PUT /api/rules")
         try:
             svc.settings.update(body)
         except SettingsError as e:
             raise HTTPException(422, str(e))
-        return get_settings()
+        return await get_settings()
 
     @app.get("/api/devices")
-    def get_devices():
+    async def get_devices():
         now = svc.clock.now().timestamp()
         window = 3 * svc.settings.data["devices"]["interval_s"]
         return [{**d, "online": now - d.get("last_seen_ts", 0) <= window} for d in svc.devices.all()]
 
     @app.patch("/api/devices/{mac}")
-    def patch_device(mac: str, body: dict = Body(...)):
+    async def patch_device(mac: str, body: dict = Body(...)):
         try:
             return svc.devices.patch(mac, body)
         except KeyError:
@@ -165,17 +165,17 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
             raise HTTPException(422, str(e))
 
     @app.delete("/api/devices/{mac}")
-    def delete_device(mac: str):
+    async def delete_device(mac: str):
         if not svc.devices.delete(mac):
             raise HTTPException(404, "unknown device")
         return {"deleted": mac.lower()}
 
     @app.get("/api/patterns")
-    def patterns():
+    async def patterns():
         return catalog()
 
     @app.get("/api/log")
-    def get_log():
+    async def get_log():
         return list(svc.arbiter.log)
 
     @app.get("/api/stream")

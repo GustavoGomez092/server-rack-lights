@@ -153,3 +153,37 @@ def test_ui_is_served(client):
     assert r.status_code == 200 and "<title>LED Notify</title>" in r.text
     assert client.get("/app.js").status_code == 200
     assert client.get("/style.css").status_code == 200
+
+
+# ---- SSE stream ----------------------------------------------------------------------------
+class _FakeRequest:
+    async def is_disconnected(self):
+        return False
+
+
+def _stream_body(app):
+    route = next(r for r in app.routes if getattr(r, "path", None) == "/api/stream")
+    return route.endpoint
+
+
+def test_stream_sends_state_then_forwards_log_but_not_settings(svc):
+    import asyncio
+    import json
+
+    app = create_app(svc)
+
+    async def run():
+        resp = await _stream_body(app)(_FakeRequest())
+        it = resp.body_iterator
+        first = await asyncio.wait_for(it.__anext__(), 2)
+        svc.hub.publish("settings", {"x": 1})
+        svc.hub.publish("log", {"name": "hello"})
+        second = await asyncio.wait_for(it.__anext__(), 2)
+        await it.aclose()
+        return first, second
+
+    first, second = asyncio.run(run())
+    assert first.startswith("event: state\n")
+    assert "current" in json.loads(first.split("data: ", 1)[1])
+    assert second.startswith("event: log\n") and '"hello"' in second  # settings message skipped
+    assert not svc.hub._subs  # unsubscribed on close
