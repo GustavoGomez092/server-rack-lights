@@ -60,9 +60,10 @@ class DeviceStore:
         self._commit({**self._raw, "devices": devices})
         return True
 
-    def save(self) -> None:
+    def save(self, publish: bool = True) -> None:
         save_json(self.path, self._raw)
-        self._publish()
+        if publish:
+            self._publish()
 
     def _commit(self, raw: dict) -> None:
         """Persist the new state first; only then replace the in-memory state."""

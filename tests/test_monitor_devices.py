@@ -1,6 +1,7 @@
 import pytest
 
 from led_notify.monitors.devices import DeviceMonitor, DeviceTracker, is_private_mac, parse_arp_scan
+from led_notify.hub import Hub
 from led_notify.store.devices import DeviceStore
 
 PHONE = ("192.168.0.20", "da:11:22:33:44:55", "(Unknown: locally administered)")
@@ -112,3 +113,58 @@ async def test_device_monitor_uses_configured_interface(store, clock, settings):
     m = DeviceMonitor(settings, clock, store, scan=scan)
     assert await m.check() == []
     assert seen == ["eth0"]
+
+
+# ---- final fixes: publish only on change (F5) ------------------------------------
+def drain(q):
+    kinds = []
+    while not q.empty():
+        kinds.append(q.get_nowait()[0])
+    return kinds
+
+
+def test_unchanged_scan_saves_last_seen_without_publishing(tmp_path, clock, settings):
+    hub = Hub()
+    q = hub.subscribe(maxsize=100)
+    store = DeviceStore(tmp_path / "devices.json", hub)
+    cfg = settings.data["devices"]
+    t = DeviceTracker(store)
+    t.observe([ROUTER, TV], clock.now(), cfg)  # baseline
+    assert drain(q) == ["devices"]
+    clock.advance(60)
+    t.observe([ROUTER, TV], clock.now(), cfg)
+    assert drain(q) == []
+    assert DeviceStore(tmp_path / "devices.json").get(TV[1])["last_seen_ts"] == clock.now().timestamp()
+
+
+@pytest.mark.parametrize("scan", [
+    [ROUTER, ("192.168.0.31", TV[1], "Roku")],  # ip changed
+    [ROUTER, (TV[0], TV[1], "Roku Inc")],  # vendor changed
+    [ROUTER, TV, PHONE],  # new device
+])
+def test_changed_scan_publishes(tmp_path, clock, settings, scan):
+    hub = Hub()
+    q = hub.subscribe(maxsize=100)
+    store = DeviceStore(tmp_path / "devices.json", hub)
+    cfg = settings.data["devices"]
+    t = DeviceTracker(store)
+    t.observe([ROUTER, TV], clock.now(), cfg)
+    drain(q)
+    clock.advance(60)
+    t.observe(scan, clock.now(), cfg)
+    assert drain(q) == ["devices"]
+
+
+def test_device_back_online_publishes(tmp_path, clock, settings):
+    hub = Hub()
+    q = hub.subscribe(maxsize=100)
+    store = DeviceStore(tmp_path / "devices.json", hub)
+    cfg = settings.data["devices"]
+    t = DeviceTracker(store)
+    t.observe([ROUTER, TV], clock.now(), cfg)
+    clock.advance(600)
+    t.observe([ROUTER], clock.now(), cfg)
+    drain(q)
+    clock.advance(60)
+    t.observe([ROUTER, TV], clock.now(), cfg)  # TV was away 11 min > 3 scan intervals
+    assert drain(q) == ["devices"]

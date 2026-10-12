@@ -267,7 +267,11 @@ function connectStream() {
   const es = new EventSource("/api/stream");
   es.addEventListener("state", (e) => renderState(JSON.parse(e.data)));
   es.addEventListener("log", (e) => addLog(JSON.parse(e.data)));
-  es.addEventListener("devices", () => { if (!$("#tab-devices").hidden) loadDevices(); });
+  es.addEventListener("devices", () => {
+    // Don't re-render under the user's cursor: it would wipe a name being typed.
+    const editing = document.activeElement && document.activeElement.matches("#dev-table input");
+    if (!$("#tab-devices").hidden && !editing) loadDevices();
+  });
 }
 
 (async function init() {

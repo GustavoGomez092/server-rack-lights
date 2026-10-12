@@ -47,12 +47,15 @@ class DeviceTracker:
         iso = now_wall.isoformat(timespec="seconds")
         baseline = not self.store.baseline_done
         events: list[Event] = []
+        changed = False  # anything the Devices tab shows beyond last_seen
+        offline_after_s = 3 * cfg["interval_s"]  # same "online" window as the API
         for ip, mac, vendor in results:
             rec = self.store.get(mac)
             if rec is None:
                 rec = {"mac": mac, "ip": ip, "vendor": vendor, "name": "", "known": False,
                        "announce_arrival": False, "private_mac": is_private_mac(mac),
                        "first_seen": iso, "last_seen": iso, "last_seen_ts": ts}
+                changed = True
                 if not baseline:
                     late = in_window(now_wall, cfg["late_start"], cfg["late_end"])
                     events.append(Event("device.new_late" if late else "device.new", "oneshot", source="devices",
@@ -62,14 +65,19 @@ class DeviceTracker:
                 if rec.get("announce_arrival") and away_s > cfg["arrival_absent_min"] * 60:
                     events.append(Event("device.known_arrived", "oneshot", source="devices",
                                         data={"key": mac, "mac": mac, "name": rec.get("name") or mac}))
+                if rec.get("ip") != ip or (vendor and rec.get("vendor") != vendor) or away_s > offline_after_s:
+                    changed = True  # new address/vendor, or back online
                 rec.update(ip=ip, last_seen=iso, last_seen_ts=ts)
                 if vendor:
                     rec["vendor"] = vendor
             self.store.upsert(rec)
         if baseline and results:
             self.store.mark_baseline()
+            changed = True
         if results:
-            self.store.save()
+            # Always persist last_seen, but only push "devices" to the UI when something it shows
+            # changed: a re-render every scan wipes whatever the user is typing.
+            self.store.save(publish=changed)
         return events
 
 
