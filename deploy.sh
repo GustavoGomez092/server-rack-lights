@@ -17,7 +17,7 @@ sudo mkdir -p $APP/src $APP/data && sudo chown -R \$(id -un) $APP/src
 for f in settings.json devices.json; do
   if sudo test -f $APP/data/\$f; then
     sudo cp -p $APP/data/\$f $APP/data/\$f.pre-deploy-$STAMP
-    sudo find $APP/data -maxdepth 1 -name \"\$f.pre-deploy-*\" | sort -r | tail -n +6 | xargs -r sudo rm -f
+    sudo find $APP/data -maxdepth 1 -name \"\$f.pre-deploy-*\" | sort -r | tail -n +6 | while read -r old; do sudo rm -f \"\$old\"; done
   fi
 done"
 rsync -az --delete --exclude .venv --exclude .git --exclude __pycache__ --exclude .pytest_cache \
