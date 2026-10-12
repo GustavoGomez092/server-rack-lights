@@ -132,7 +132,13 @@ async def test_reconnects_when_link_drops_and_replays(clock, running):
 
 async def test_write_failure_triggers_reconnect(clock, running):
     factory, made = make_factory()
-    link = StripLink("AA", clock, strip_factory=factory)
+    seen = []
+
+    def spying_factory(address):
+        seen.append(link.status()["last_error"])  # error visible during the reconnect cycle
+        return factory(address)
+
+    link = StripLink("AA", clock, strip_factory=spying_factory)
     running(link)
     await spin()
     made[-1].raise_on_write = True
@@ -140,6 +146,7 @@ async def test_write_failure_triggers_reconnect(clock, running):
     assert "write failed" in link.status()["last_error"]
     await spin()
     assert len(made) == 2 and made[-1].calls[0] == ("effect", 3)
+    assert "write failed" in seen[-1]  # not replaced by the generic "strip disconnected"
 
 
 async def test_keepalive_queries_status(clock, running):
@@ -148,3 +155,32 @@ async def test_keepalive_queries_status(clock, running):
     running(link)
     await spin(60)
     assert ("status",) in made[-1].calls
+
+
+async def test_command_during_replay_is_not_overwritten_by_stale_state(clock, running):
+    gate = asyncio.Event()
+    made = []
+
+    class GatedStrip(FakeBleStrip):
+        async def on(self):
+            await gate.wait()
+            await super().on()
+
+    def factory(address):
+        s = GatedStrip(fail=False)
+        made.append(s)
+        return s
+
+    link = StripLink("AA", clock, strip_factory=factory)
+    await link.power(True)
+    await link.effect(1)
+    running(link)
+    await spin()
+    assert made[0].calls == []  # replay is blocked inside on()
+    cmd = asyncio.create_task(link.effect(2))  # live command arrives mid-replay, queues on the lock
+    await spin()
+    gate.set()
+    await cmd
+    await spin()
+    effects = [c for c in made[0].calls if c[0] == "effect"]
+    assert effects and effects[-1] == ("effect", 2)

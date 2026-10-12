@@ -75,7 +75,8 @@ class StripLink:
                 await self._safe_disconnect()
                 raise
             except (Exception, SystemExit) as e:  # banlanx_ctl raises SystemExit when the strip isn't found
-                self.last_error = f"{type(e).__name__}: {e}"
+                if not self._broken:  # a failed write already recorded the root cause
+                    self.last_error = f"{type(e).__name__}: {e}"
                 log.warning("strip link: %s", self.last_error)
             self.connected = False
             await self._safe_disconnect()
@@ -94,19 +95,22 @@ class StripLink:
         raise ConnectionError("strip disconnected")
 
     async def _replay(self) -> None:
-        d = dict(self._desired)
-        if "power" in d:
-            on = d["power"]
-            await self._do(lambda s: s.on() if on else s.off())
-        mode = d.get("mode")
-        if mode and mode[0] == "color":
-            await self._do(lambda s: s.color(*mode[1]))
-        elif mode:
-            await self._do(lambda s: s.effect(mode[1]))
-            if "speed" in d:
-                await self._do(lambda s: s.speed(d["speed"]))
-            if "brightness" in d:
-                await self._do(lambda s: s.brightness(d["brightness"]))
+        # Hold the lock for the whole replay and read _desired live at each step, so a
+        # command arriving mid-replay is never overwritten by a stale snapshot.
+        async with self._lock:
+            s = self._strip
+            d = self._desired
+            if "power" in d:
+                await (s.on() if d["power"] else s.off())
+            mode = d.get("mode")
+            if mode and mode[0] == "color":
+                await s.color(*mode[1])
+            elif mode:
+                await s.effect(mode[1])
+                if "speed" in d:
+                    await s.speed(d["speed"])
+                if "brightness" in d:
+                    await s.brightness(d["brightness"])
 
     async def _do(self, fn) -> None:
         if not self.connected or self._strip is None:
