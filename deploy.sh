@@ -21,5 +21,6 @@ else
   sudo casaos-cli app-management install -f $APP/src/docker-compose.yml || true
 fi
 sudo docker compose -f $APP/src/docker-compose.yml up -d --force-recreate
-curl -fsS --retry 15 --retry-connrefused --retry-delay 2 http://127.0.0.1:8787/api/state | head -c 600
+out=\$(curl -fsS --retry 15 --retry-connrefused --retry-delay 2 http://127.0.0.1:8787/api/state)
+printf '%s\n' \"\$out\" | head -c 600
 echo"
