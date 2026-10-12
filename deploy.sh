@@ -7,8 +7,19 @@ REGISTERED=/var/lib/casaos/apps/led-notify
 SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=/tmp/led-notify-ssh-%r@%h:%p" -o ControlPersist=60)
 cd "$(dirname "$0")"
 
+STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+
 # One multiplexed SSH connection is reused for every step (the server bans IPs after aborted connections).
-ssh "${SSH_OPTS[@]}" "$HOST" "sudo mkdir -p $APP/src $APP/data && sudo chown -R \$(id -un) $APP/src"
+# Before anything changes, back up the live data files (newest 5 kept each): an older image treats a
+# settings.json written by newer code as invalid, so a rollback needs the matching backup.
+ssh "${SSH_OPTS[@]}" "$HOST" "set -e
+sudo mkdir -p $APP/src $APP/data && sudo chown -R \$(id -un) $APP/src
+for f in settings.json devices.json; do
+  if sudo test -f $APP/data/\$f; then
+    sudo cp -p $APP/data/\$f $APP/data/\$f.pre-deploy-$STAMP
+    sudo find $APP/data -maxdepth 1 -name \"\$f.pre-deploy-*\" | sort -r | tail -n +6 | xargs -r sudo rm -f
+  fi
+done"
 rsync -az --delete --exclude .venv --exclude .git --exclude __pycache__ --exclude .pytest_cache \
   --exclude /data -e "ssh ${SSH_OPTS[*]}" ./ "$HOST:$APP/src/"
 

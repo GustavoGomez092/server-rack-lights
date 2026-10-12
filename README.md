@@ -30,3 +30,8 @@ Note: `./deploy.sh` always (re)creates the container with `docker compose -f /DA
 so repo compose edits take effect. `casaos-cli app-management install` only registers the ZimaOS dashboard tile (it creates no container),
 so it runs once when `/var/lib/casaos/apps/led-notify` is missing; afterwards the synced compose is copied over the registered one.
 All SSH steps share one multiplexed connection.
+
+Before syncing, `./deploy.sh` copies `/DATA/AppData/led-notify/data/settings.json` and `devices.json` to
+`<name>.pre-deploy-<UTC timestamp>` next to them (newest 5 of each kept), because older code treats a
+`settings.json` saved by newer code as invalid and falls back to defaults.
+Rollback = deploy the old commit, then restore the matching `settings.json.pre-deploy-*`.
