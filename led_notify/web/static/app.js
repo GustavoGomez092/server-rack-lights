@@ -208,6 +208,8 @@ async function loadRulesAndSettings() {
   });
 }
 const soundOptions = (selected) => `<option value="" ${selected ? "" : "selected"}>(silent)</option>` +
+  (selected && !state.sounds.some((s) => s.ref === selected)
+    ? `<option value="${esc(selected)}" selected>${esc(selected)} (missing)</option>` : "") +
   state.sounds.map((s) => `<option value="${esc(s.ref)}" ${s.ref === selected ? "selected" : ""}>${esc(s.ref)}</option>`).join("");
 function renderRules() {
   $("#rules-table tbody").innerHTML = Object.entries(state.rules).map(([name, r]) => `
