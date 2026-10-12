@@ -53,7 +53,10 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio:
     devices = DeviceStore(data_dir / "devices.json", hub)
     link = FakeStrip() if fake_strip else StripLink(address, clock)
     real_audio = audio and not fake_strip
-    player = AudioPlayer(settings.data["audio"]["device"], runner=run_aplay if real_audio else silent_runner)
+    # The device is re-read from settings on every chime, so changing it in the UI needs no restart.
+    player = AudioPlayer(lambda: settings.data["audio"]["device"], runner=run_aplay if real_audio else silent_runner)
+    # The mixer is set up once for the startup device's card; switching to another card needs a restart.
+    mixer_device = settings.data["audio"]["device"]
     audio_svc = AudioService(SoundLibrary(data_dir), player)
     arbiter = Arbiter(Player(link, clock), settings, clock, hub, chimes=audio_svc)
     supervisor = Supervisor(build_monitors(settings, devices, clock) if monitors else [], arbiter.submit, clock, hub)
@@ -68,7 +71,7 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio:
         engine = [asyncio.create_task(arbiter.run()), asyncio.create_task(supervisor.run()),
                   asyncio.create_task(player.run())]
         if real_audio:  # amixer may hang; never let it delay the lights
-            engine.append(asyncio.create_task(init_mixer(player.device)))
+            engine.append(asyncio.create_task(init_mixer(mixer_device)))
         link_task = asyncio.create_task(link.run()) if isinstance(link, StripLink) else None
         try:
             yield

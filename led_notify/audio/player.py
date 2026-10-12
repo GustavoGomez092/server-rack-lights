@@ -98,12 +98,17 @@ async def init_mixer(device: str) -> None:
 
 
 class AudioPlayer:
-    def __init__(self, device: str, runner=run_aplay):
-        self.device = device
+    def __init__(self, device, runner=run_aplay):
+        """`device` is an ALSA name or a zero-arg callable returning one (read on every play)."""
+        self._device = device
         self.runner = runner
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=QUEUE_MAX)
         self.played = 0
         self.last_error = ""
+
+    @property
+    def device(self) -> str:
+        return self._device() if callable(self._device) else self._device
 
     def enqueue(self, path, volume_pct: int) -> None:
         if self._queue.full():
@@ -128,5 +133,5 @@ class AudioPlayer:
             await self.play_now(path, volume)
 
     def status(self) -> dict:
-        return {"device": self.device, "played": self.played, "last_error": self.last_error,
-                "queued": self._queue.qsize()}
+        return {"device": self.device, "mode": "silent" if self.runner is silent_runner else "speaker",
+                "played": self.played, "last_error": self.last_error, "queued": self._queue.qsize()}

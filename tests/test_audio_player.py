@@ -6,7 +6,7 @@ import wave
 import pytest
 
 from led_notify.audio.fake import FakeChimes
-from led_notify.audio.player import AudioPlayer, scale_wav
+from led_notify.audio.player import AudioPlayer, scale_wav, silent_runner
 from led_notify.audio.service import AudioService
 
 
@@ -62,6 +62,25 @@ async def test_play_now_scales_and_uses_device(tmp_path):
     await player.play_now(p, 50)
     assert rec.calls == [("plughw:1,0", [500, -500], 15.0)]
     assert player.status()["played"] == 1 and player.status()["last_error"] == ""
+
+
+async def test_device_callable_is_resolved_per_play(tmp_path):
+    p = tmp_path / "s.wav"
+    p.write_bytes(make_wav([1000]))
+    rec = Recorder()
+    current = {"device": "plughw:1,0"}
+    player = AudioPlayer(lambda: current["device"], runner=rec)
+    await player.play_now(p, 100)
+    assert player.status()["device"] == "plughw:1,0"
+    current["device"] = "plughw:2,0"                      # settings changed: no restart needed
+    await player.play_now(p, 100)
+    assert [c[0] for c in rec.calls] == ["plughw:1,0", "plughw:2,0"]
+    assert player.status()["device"] == "plughw:2,0"
+
+
+def test_status_mode():
+    assert AudioPlayer("d", runner=Recorder()).status()["mode"] == "speaker"
+    assert AudioPlayer("d", runner=silent_runner).status()["mode"] == "silent"
 
 
 async def test_runner_failure_is_isolated_and_reported(tmp_path):

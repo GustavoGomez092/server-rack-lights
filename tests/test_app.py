@@ -70,3 +70,10 @@ def test_shutdown_disconnects_the_strip(tmp_path, monkeypatch):
     with TestClient(app):
         wait_for(lambda: svc.link.status()["connected"])
     assert made and made[-1].client.is_connected is False  # lifespan shutdown -> Strip.disconnect()
+
+
+def test_audio_device_follows_settings_without_restart(tmp_path):
+    _, svc = build(tmp_path / "data", "", fake_strip=True, monitors=False)
+    assert svc.audio.status()["device"] == "plughw:1,0" and svc.audio.status()["mode"] == "silent"
+    svc.settings.update({"audio": {"device": "plughw:2,0"}})
+    assert svc.audio.player.device == "plughw:2,0"
