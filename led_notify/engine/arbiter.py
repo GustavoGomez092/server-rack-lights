@@ -37,7 +37,7 @@ class _State:
 
 
 class Arbiter:
-    def __init__(self, player, settings, clock, hub=None, log_size: int = 200):
+    def __init__(self, player, settings, clock, hub=None, log_size: int = 200, chimes=None):
         self.player = player
         self.settings = settings
         self.clock = clock
@@ -52,6 +52,8 @@ class Arbiter:
         self._steady_task: asyncio.Task | None = None  # loops a Sequence used as the base look
         self._rendered_key: tuple | None = None
         self._seq = 0
+        self.chimes = chimes
+        self._chimed_states: set[int] = set()  # state seqs that already chimed on first display
         self._wake = asyncio.Event()
 
     # ---- public API ------------------------------------------------------------
@@ -175,6 +177,8 @@ class Arbiter:
                 await self.player.show(base.pattern, base.level)
             self._rendered_key = base.key
             self._set_current(base.desc, base.reason)
+            if base.key[0] == "state":
+                self._chime_state(base.key)
 
     # ---- internals ---------------------------------------------------------------
     def _rule_for(self, ev: Event) -> dict:
@@ -187,6 +191,7 @@ class Arbiter:
             "look": ev.look or {"pattern": "white_flash"}, "duration_s": ev.duration_s,
             "quiet_behavior": "dim" if PRIORITIES[priority] >= PRIORITIES["high"] else "suppress",
             "clear_followup": None,
+            "sound": ev.sound if ev.sound is not None else "default",
         }
 
     def _live_rule(self, st: _State) -> dict:
@@ -213,6 +218,36 @@ class Arbiter:
             return None
         return max(1, round(mx * self.settings.data["quiet_hours"]["brightness_pct"] / 100))
 
+    def _chime(self, rule: dict, force: bool = False) -> None:
+        """Queue the rule's sound: day volume, or night volume for critical rules; never raises."""
+        if self.chimes is None:
+            return
+        ref = rule.get("sound")
+        audio = self.settings.data["audio"]
+        if not ref or not audio["enabled"]:
+            return
+        if force or not self._quiet():
+            volume = audio["volume_pct"]
+        elif rule["priority"] == "critical":
+            volume = audio["night_volume_pct"]
+        else:
+            return
+        try:
+            self.chimes.chime(ref, volume)
+        except Exception:
+            log.exception("chime %s failed", ref)
+
+    def _chime_state(self, key: tuple) -> None:
+        """A state chimes the first time it becomes the displayed look, never again while active."""
+        _, name, seq, *_ = key
+        if seq in self._chimed_states:
+            return
+        st = self._states.get(name)
+        if st is None or st.seq != seq:
+            return
+        self._chimed_states.add(seq)
+        self._chime(self._live_rule(st))
+
     def _manual_active(self) -> dict | None:
         if self._manual and self.clock.monotonic() >= self._manual["expires"]:
             self._manual = None
@@ -233,6 +268,7 @@ class Arbiter:
         st = self._states.pop(ev.name, None)
         if st is None:
             return "ignored:not_active", None
+        self._chimed_states.discard(st.seq)
         name = self._live_rule(st).get("clear_followup")
         followup = Event(name, "oneshot", source=ev.source, data=dict(ev.data)) if name else None
         return "cleared", followup
@@ -298,6 +334,7 @@ class Arbiter:
         try:
             pattern = self._pattern_of(rule)
             self._log(ev, "shown")
+            self._chime(rule, force=ev.force)
             self._set_current(self._desc_of(rule), f"{ev.name} ({ev.source})")
             await self.player.show(pattern, level)
             if not isinstance(pattern, Sequence):
