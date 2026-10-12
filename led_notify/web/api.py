@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from ..audio.library import SoundError
+from ..audio.library import MAX_UPLOAD_BYTES, SoundError
 from ..audio.refs import CUSTOM_PREFIX
 from ..events import Event
 from ..patterns import LOOK_KEYS, PatternError, catalog, resolve
@@ -202,15 +202,24 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
 
     @app.get("/api/sounds")
     async def list_sounds():
-        return svc.audio.library.list() if svc.audio else []
+        return await asyncio.to_thread(svc.audio.library.list) if svc.audio else []
 
     @app.put("/api/sounds/{name}")
     async def upload_sound(name: str, request: Request):
         if svc.audio is None:
             raise HTTPException(404, "audio is not available")
-        data = await request.body()
+        too_big = HTTPException(413, f"upload exceeds {MAX_UPLOAD_BYTES} bytes")
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_UPLOAD_BYTES:
+            raise too_big
+        buf = bytearray()
+        async for chunk in request.stream():
+            buf += chunk
+            if len(buf) > MAX_UPLOAD_BYTES:
+                raise too_big
         try:
-            return svc.audio.library.import_upload(name, data, request.headers.get("content-type", ""))
+            return await asyncio.to_thread(svc.audio.library.import_upload, name, bytes(buf),
+                                           request.headers.get("content-type", ""))
         except SoundError as e:
             raise HTTPException(422, str(e))
 

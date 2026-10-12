@@ -112,7 +112,7 @@ class AudioPlayer:
 
     async def play_now(self, path, volume_pct: int) -> None:
         try:
-            wav = scale_wav(Path(path).read_bytes(), volume_pct)
+            wav = await asyncio.to_thread(lambda: scale_wav(Path(path).read_bytes(), volume_pct))
             await self.runner(self.device, wav, PLAY_TIMEOUT_S)
             self.played += 1
             self.last_error = ""

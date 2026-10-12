@@ -65,10 +65,10 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio:
         # On SIGTERM uvicorn runs this shutdown path: stop the engine first (its last writes still
         # reach the strip), then the link, whose cancellation disconnects from the strip so BlueZ
         # does not keep a stale connection for the next container.
-        if real_audio:
-            await init_mixer(player.device)
         engine = [asyncio.create_task(arbiter.run()), asyncio.create_task(supervisor.run()),
                   asyncio.create_task(player.run())]
+        if real_audio:  # amixer may hang; never let it delay the lights
+            engine.append(asyncio.create_task(init_mixer(player.device)))
         link_task = asyncio.create_task(link.run()) if isinstance(link, StripLink) else None
         try:
             yield

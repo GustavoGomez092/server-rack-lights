@@ -256,3 +256,24 @@ def test_webhook_sound_validation(client):
 
 def test_state_includes_audio_status(client):
     assert client.get("/api/state").json()["audio"] == {"fake": True}
+
+
+def test_upload_content_length_over_limit_is_413_without_reading(client):
+    from led_notify.audio.library import MAX_UPLOAD_BYTES
+    r = client.put("/api/sounds/big.wav", content=b"x",
+                   headers={"Content-Type": "audio/wav", "Content-Length": str(MAX_UPLOAD_BYTES + 1)})
+    assert r.status_code == 413
+
+
+def test_upload_streamed_body_over_limit_is_413(client):
+    from led_notify.audio.library import MAX_UPLOAD_BYTES
+    chunk = b"x" * 65536
+    seen = []
+
+    def body():
+        for _ in range(MAX_UPLOAD_BYTES // len(chunk) + 40):
+            seen.append(1)
+            yield chunk
+
+    r = client.put("/api/sounds/big.wav", content=body(), headers={"Content-Type": "audio/wav"})
+    assert r.status_code == 413
