@@ -5,32 +5,33 @@ import copy
 import re
 from pathlib import Path
 
+from ..audio.refs import is_valid_ref
 from ..events import _NAME_RE, RULE_PRIORITIES
 from ..patterns import BREATH_FX, NAMED
 from .jsonfile import load_json, move_aside, save_json
 
 
-def _rule(priority, pattern, kind, duration_s=None, clear_followup=None):
+def _rule(priority, pattern, kind, duration_s=None, clear_followup=None, sound="default"):
     return {
         "enabled": True, "kind": kind, "priority": priority, "pattern": pattern, "duration_s": duration_s,
         "quiet_behavior": "dim" if priority in ("high", "critical") else "suppress",
-        "clear_followup": clear_followup,
+        "clear_followup": clear_followup, "sound": sound,
     }
 
 
 DEFAULT_RULES = {
-    "internet.down": _rule("critical", "red_breath", "state", clear_followup="internet.up"),
-    "dns.down": _rule("high", "purple_breath", "state"),
-    "disk.smart_error": _rule("high", "red_white_snake", "state"),
+    "internet.down": _rule("critical", "red_breath", "state", clear_followup="internet.up", sound="error"),
+    "dns.down": _rule("high", "purple_breath", "state", sound="error"),
+    "disk.smart_error": _rule("high", "red_white_snake", "state", sound="error"),
     "internet.slow": _rule("normal", "yellow_breath", "state"),
     "disk.full": _rule("normal", "yellow_stacking", "state"),
     "cpu.hot": _rule("normal", "fire_red_yellow", "state"),
-    "device.new_late": _rule("high", "intruder", "oneshot", 8),
+    "device.new_late": _rule("high", "intruder", "oneshot", 8, sound="error"),
     "device.new": _rule("normal", "new_device", "oneshot"),
-    "container.died": _rule("normal", "purple_flash_x3", "oneshot"),
-    "internet.up": _rule("normal", "green_flash_x2", "oneshot"),
-    "device.known_arrived": _rule("low", "welcome", "oneshot", 6),
-    "adguard.block_spike": _rule("low", "yellow_white_stars", "oneshot", 5),
+    "container.died": _rule("normal", "purple_flash_x3", "oneshot", sound="error"),
+    "internet.up": _rule("normal", "green_flash_x2", "oneshot", sound="success"),
+    "device.known_arrived": _rule("low", "welcome", "oneshot", 6, sound="success"),
+    "adguard.block_spike": _rule("low", "yellow_white_stars", "oneshot", 5, sound=None),
 }
 
 DEFAULT_SETTINGS = {
@@ -51,6 +52,7 @@ DEFAULT_SETTINGS = {
     "docker": {"socket": "/var/run/docker.sock", "intentional_window_s": 15},
     "adguard": {"url": "http://127.0.0.1:3001", "username": "", "password": "", "min_blocked": 50,
                 "factor": 3.0, "interval_s": 60},
+    "audio": {"enabled": True, "volume_pct": 70, "night_volume_pct": 30, "device": "plughw:1,0"},
     "rules": DEFAULT_RULES,
 }
 
@@ -60,11 +62,12 @@ RANGES = {
     "quiet_hours.brightness_pct": (1, 100), "internet.slow_loss_pct": (1, 100),
     "disk.full_pct": (1, 100), "disk.clear_pct": (1, 100),
     "adguard.min_blocked": (1, 100000), "adguard.factor": (1, 100),
+    "audio.volume_pct": (0, 100), "audio.night_volume_pct": (0, 100),
 }
 POSITIVE_SUFFIXES = ("_s", "_min", "_rounds", "_ms")
 TIME_KEYS = ("start", "end", "late_start", "late_end")
 EMPTY_LIST_OK = ("disk.smart_devices",)
-RULE_KEYS = {"enabled", "kind", "priority", "pattern", "duration_s", "quiet_behavior", "clear_followup"}
+RULE_KEYS = {"enabled", "kind", "priority", "pattern", "duration_s", "quiet_behavior", "clear_followup", "sound"}
 IDLE_MODES = ("glow", "breath")
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -155,6 +158,8 @@ def _check_rules(rules) -> None:
         f = r["clear_followup"]
         if f not in (None, "") and not (isinstance(f, str) and _NAME_RE.match(f)):
             raise SettingsError(f"{p}.clear_followup: must be empty or an event name")
+        if r["sound"] is not None and not is_valid_ref(r["sound"]):
+            raise SettingsError(f"{p}.sound: must be empty, default, success, error or custom:<name>")
 
 
 def validate(data) -> None:
@@ -176,6 +181,13 @@ def _drop_secret_placeholders(patch: dict) -> None:
             del parent[path[-1]]
 
 
+def _migrate(data: dict) -> None:
+    """Older files have rules without "sound"; custom rules default to silent."""
+    for rule in (data.get("rules") or {}).values():
+        if isinstance(rule, dict):
+            rule.setdefault("sound", None)
+
+
 class SettingsStore:
     def __init__(self, path: Path, hub=None):
         self.path = Path(path)
@@ -186,6 +198,7 @@ class SettingsStore:
             self.warning = f"settings.json was not an object; saved as {backup}, using defaults"
             stored = {}
         data = deep_merge(copy.deepcopy(DEFAULT_SETTINGS), stored)
+        _migrate(data)
         try:
             validate(data)
         except SettingsError as e:

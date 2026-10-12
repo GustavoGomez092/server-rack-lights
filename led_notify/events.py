@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .audio.refs import is_valid_ref
+
 PRIORITIES = {"idle": 0, "low": 10, "normal": 20, "manual": 25, "high": 30, "critical": 40}
 RULE_PRIORITIES = ("low", "normal", "high", "critical")
 KINDS = ("oneshot", "start", "clear")
@@ -22,6 +24,7 @@ class Event:
     duration_s: float | None = None
     data: dict = field(default_factory=dict)
     force: bool = False
+    sound: str | None = None
 
     def __post_init__(self):
         if not isinstance(self.name, str) or not _NAME_RE.match(self.name):
@@ -32,3 +35,5 @@ class Event:
             raise ValueError(f"priority must be one of {', '.join(RULE_PRIORITIES)}")
         if self.duration_s is not None:
             self.duration_s = min(MAX_DURATION_S, max(MIN_DURATION_S, float(self.duration_s)))
+        if self.sound not in (None, "") and not is_valid_ref(self.sound):
+            raise ValueError("sound must be default, success, error or custom:<name>")

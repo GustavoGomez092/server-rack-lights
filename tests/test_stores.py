@@ -81,7 +81,7 @@ def test_invalid_patches_are_rejected_and_nothing_changes(settings, patch):
 
 def test_new_complete_rule_can_be_added(settings):
     rule = {"enabled": True, "kind": "oneshot", "priority": "low", "pattern": "green_flash",
-            "duration_s": None, "quiet_behavior": "suppress", "clear_followup": None}
+            "duration_s": None, "quiet_behavior": "suppress", "clear_followup": None, "sound": None}
     settings.update({"rules": {"backup.done": rule}})
     assert settings.rule("backup.done") == rule
 
