@@ -8,7 +8,9 @@ from led_notify.app import build, build_monitors
 from led_notify.patterns import NAMED
 from led_notify.store.devices import DeviceStore
 from led_notify.store.settings import SettingsStore
+from led_notify.driver import link as link_mod
 from tests.fakes import FakeClock
+from tests.test_link import FakeBleStrip
 
 
 def wait_for(fn, timeout=3.0):
@@ -50,3 +52,21 @@ def test_smoke_previews_every_named_pattern():
     smoke.run(client, sleep=slept.append)
     assert len(posted) == len(NAMED) and len(slept) == len(NAMED)
     assert b'"pattern":"red_breath"' in posted[0].replace(b" ", b"")
+
+
+def test_shutdown_disconnects_the_strip(tmp_path, monkeypatch):
+    made = []
+
+    def factory(address):
+        made.append(FakeBleStrip(fail=False))
+        return made[-1]
+
+    async def no_release(address):
+        pass
+
+    monkeypatch.setattr(link_mod, "_default_factory", factory)
+    monkeypatch.setattr(link_mod, "bluez_release", no_release)
+    app, svc = build(tmp_path / "data", "A6:15:50:62:0A:9D", fake_strip=False, monitors=False)
+    with TestClient(app):
+        wait_for(lambda: svc.link.status()["connected"])
+    assert made and made[-1].client.is_connected is False  # lifespan shutdown -> Strip.disconnect()

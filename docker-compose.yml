@@ -6,6 +6,7 @@ services:
     pull_policy: never
     network_mode: host
     restart: unless-stopped
+    stop_grace_period: 15s
     cap_add: [NET_RAW, NET_ADMIN, SYS_RAWIO, SYS_ADMIN]
     devices:
       - /dev/nvme0:/dev/nvme0

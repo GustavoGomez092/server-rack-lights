@@ -56,14 +56,20 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool):
 
     @asynccontextmanager
     async def lifespan(_app):
-        coros = [arbiter.run(), supervisor.run()]
-        if isinstance(link, StripLink):
-            coros.append(link.run())
-        tasks = [asyncio.create_task(c) for c in coros]
-        yield
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
+        # On SIGTERM uvicorn runs this shutdown path: stop the engine first (its last writes still
+        # reach the strip), then the link, whose cancellation disconnects from the strip so BlueZ
+        # does not keep a stale connection for the next container.
+        engine = [asyncio.create_task(arbiter.run()), asyncio.create_task(supervisor.run())]
+        link_task = asyncio.create_task(link.run()) if isinstance(link, StripLink) else None
+        try:
+            yield
+        finally:
+            for t in engine:
+                t.cancel()
+            await asyncio.gather(*engine, return_exceptions=True)
+            if link_task is not None:
+                link_task.cancel()
+                await asyncio.gather(link_task, return_exceptions=True)
 
     return create_app(svc, lifespan=lifespan), svc
 
