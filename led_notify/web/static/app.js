@@ -182,8 +182,10 @@ $("#dev-table").addEventListener("click", (e) => {
 /* ---------- rules + settings tab ---------- */
 const FIELDS = [
   ["Quiet hours", [["quiet_hours.enabled", "checkbox", "Enabled"], ["quiet_hours.start", "time", "Start"], ["quiet_hours.end", "time", "End"],
-    ["quiet_hours.brightness_pct", "number", "Brightness %"], ["quiet_hours.idle_off", "checkbox", "Idle glow off at night"]]],
-  ["Idle & brightness", [["idle.color", "color", "Idle color"], ["idle.brightness", "number", "Idle brightness (0-255)"],
+    ["quiet_hours.brightness_pct", "number", "Brightness %"], ["quiet_hours.idle_off", "checkbox", "Idle light off at night"]]],
+  ["Idle & brightness", [["idle.mode", "select", "Idle mode", ["glow", "breath"]], ["idle.color", "color", "Glow color"],
+    ["idle.breath_color", "select", "Breath color", ["red", "green", "blue", "yellow", "cyan", "purple", "white"]],
+    ["idle.breath_speed", "number", "Breath speed (1-10)"], ["idle.brightness", "number", "Idle brightness (0-255)"],
     ["max_brightness", "number", "Max brightness (0-255)"], ["manual_timeout_min", "number", "Manual timeout (min)"]]],
   ["Internet", [["internet.slow_rtt_ms", "number", "Slow if median ping above (ms)"], ["internet.slow_loss_pct", "number", "Slow if packet loss above (%)"]]],
   ["Disk & CPU", [["disk.full_pct", "number", "Disk full at (%)"], ["disk.clear_pct", "number", "Clear below (%)"],
@@ -224,10 +226,11 @@ $("#save-rules").addEventListener("click", () => {
   act(async () => { state.rules = await api("PUT", "/api/rules", rules); renderEventButtons(); }, "Rules saved");
 });
 function renderSettings() {
-  $("#settings-form").innerHTML = FIELDS.map(([title, fields]) => `<fieldset><legend>${esc(title)}</legend>${fields.map(([path, type, label]) => {
+  $("#settings-form").innerHTML = FIELDS.map(([title, fields]) => `<fieldset><legend>${esc(title)}</legend>${fields.map(([path, type, label, choices]) => {
     const v = getPath(state.settings, path);
     if (type === "checkbox") return `<label class="inline"><input type="checkbox" data-path="${path}" ${v ? "checked" : ""}> ${esc(label)}</label>`;
     if (type === "color") return `<label>${esc(label)} <input type="color" data-path="${path}" data-type="color" value="${rgbToHex(v)}"></label>`;
+    if (type === "select") return `<label>${esc(label)} <select data-path="${path}" data-type="select">${opts(choices, v)}</select></label>`;
     if (type === "secret") return `<label>${esc(label)} <input type="password" data-path="${path}" data-type="secret" autocomplete="new-password" placeholder="${v && v.set ? "set — leave blank to keep" : "not set"}"></label>`;
     return `<label>${esc(label)} <input type="${type}" data-path="${path}" data-type="${type}" value="${esc(v)}"></label>`;
   }).join("")}</fieldset>`).join("");

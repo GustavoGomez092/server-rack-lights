@@ -78,3 +78,11 @@ def test_catalog_lists_named_patterns_and_all_firmware_effects():
     assert "red_breath" in c["named"] and c["named"] == sorted(c["named"])
     assert len(c["effects"]) == len(FX) == 146
     assert c["effects"][0] == {"fx": 1, "name": "Rainbow"}
+
+
+def test_breath_effects_cover_the_seven_firmware_breath_colors():
+    from led_notify.patterns import BREATH_FX
+    assert {color: FX[fx] for color, fx in BREATH_FX.items()} == {
+        "red": "Red Breath", "green": "Green Breath", "blue": "Blue Breath", "yellow": "Yellow Breath",
+        "cyan": "Cyan Breath", "purple": "Purple Breath", "white": "White Breath",
+    }

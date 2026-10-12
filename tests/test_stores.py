@@ -236,3 +236,27 @@ def test_failed_device_save_leaves_memory_unchanged(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         d.delete("aa:00:00:00:00:01")
     assert d.all() == before
+
+
+def test_idle_defaults_keep_the_glow(settings):
+    assert settings.data["idle"]["mode"] == "glow"
+    assert settings.data["idle"]["breath_color"] == "cyan"
+    assert settings.data["idle"]["breath_speed"] == 3
+
+
+def test_idle_breath_settings_are_accepted(settings):
+    settings.update({"idle": {"mode": "breath", "breath_color": "purple", "breath_speed": 10}})
+    assert settings.data["idle"]["mode"] == "breath"
+
+
+@pytest.mark.parametrize("patch", [
+    {"idle": {"mode": "pulse"}},
+    {"idle": {"breath_color": "orange"}},
+    {"idle": {"breath_speed": 0}},
+    {"idle": {"breath_speed": 11}},
+])
+def test_invalid_idle_breath_settings_are_rejected(settings, patch):
+    before = copy.deepcopy(settings.data)
+    with pytest.raises(SettingsError):
+        settings.update(patch)
+    assert settings.data == before

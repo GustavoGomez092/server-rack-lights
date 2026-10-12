@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 
 from ..events import _NAME_RE, RULE_PRIORITIES
-from ..patterns import NAMED
+from ..patterns import BREATH_FX, NAMED
 from .jsonfile import load_json, move_aside, save_json
 
 
@@ -37,7 +37,7 @@ DEFAULT_SETTINGS = {
     "max_brightness": 255,
     "manual_timeout_min": 30,
     "webhook_token": "",
-    "idle": {"color": [0, 179, 164], "brightness": 12},
+    "idle": {"mode": "glow", "color": [0, 179, 164], "brightness": 12, "breath_color": "cyan", "breath_speed": 3},
     "quiet_hours": {"enabled": True, "start": "23:00", "end": "07:00", "brightness_pct": 20, "idle_off": True},
     "internet": {"targets": ["1.1.1.1", "8.8.8.8", "9.9.9.9"], "gateway": "192.168.0.1", "interval_s": 10,
                  "fail_rounds": 3, "ok_rounds": 2, "slow_rtt_ms": 150, "slow_loss_pct": 20, "slow_window_s": 300},
@@ -56,7 +56,7 @@ DEFAULT_SETTINGS = {
 
 SECRETS = (("adguard", "password"), ("webhook_token",))
 RANGES = {
-    "max_brightness": (0, 255), "manual_timeout_min": (1, 1440), "idle.brightness": (0, 255),
+    "max_brightness": (0, 255), "manual_timeout_min": (1, 1440), "idle.brightness": (0, 255), "idle.breath_speed": (1, 10),
     "quiet_hours.brightness_pct": (1, 100), "internet.slow_loss_pct": (1, 100),
     "disk.full_pct": (1, 100), "disk.clear_pct": (1, 100),
     "adguard.min_blocked": (1, 100000), "adguard.factor": (1, 100),
@@ -65,6 +65,7 @@ POSITIVE_SUFFIXES = ("_s", "_min", "_rounds", "_ms")
 TIME_KEYS = ("start", "end", "late_start", "late_end")
 EMPTY_LIST_OK = ("disk.smart_devices",)
 RULE_KEYS = {"enabled", "kind", "priority", "pattern", "duration_s", "quiet_behavior", "clear_followup"}
+IDLE_MODES = ("glow", "breath")
 _HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
@@ -121,6 +122,10 @@ def _check_shape(default, value, path: str) -> None:
         raise SettingsError(f"{path}: must be greater than 0")
     if path.split(".")[-1] in TIME_KEYS and not _HHMM.match(value):
         raise SettingsError(f"{path}: use HH:MM (24h)")
+    if path == "idle.mode" and value not in IDLE_MODES:
+        raise SettingsError(f"idle.mode: must be one of {', '.join(IDLE_MODES)}")
+    if path == "idle.breath_color" and value not in BREATH_FX:
+        raise SettingsError(f"idle.breath_color: must be one of {', '.join(BREATH_FX)}")
     if path == "idle.color" and (len(value) != 3 or not all(0 <= v <= 255 for v in value)):
         raise SettingsError("idle.color: must be [r, g, b] with values 0-255")
 

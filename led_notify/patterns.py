@@ -64,6 +64,9 @@ Pattern = Color | Effect | Sequence
 RED, GREEN, BLUE = (255, 0, 0), (0, 255, 0), (0, 0, 255)
 PURPLE, WHITE = (160, 0, 255), (255, 255, 255)
 
+# Firmware breath effect per colour, for the idle "breath" mode.
+BREATH_FX = {"red": 0x62, "green": 0x63, "blue": 0x64, "yellow": 0x65, "cyan": 0x66, "purple": 0x67, "white": 0x68}
+
 NAMED: dict[str, Pattern] = {
     "red_breath": Effect(0x62, 5),
     "purple_breath": Effect(0x67, 5),

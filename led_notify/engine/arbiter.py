@@ -7,7 +7,7 @@ from collections import deque
 from dataclasses import dataclass
 
 from ..events import PRIORITIES, Event
-from ..patterns import NAMED, Color, PatternError, Sequence, describe, resolve
+from ..patterns import BREATH_FX, NAMED, Color, Effect, PatternError, Sequence, describe, resolve
 from .quiet import in_window
 
 log = logging.getLogger(__name__)
@@ -279,8 +279,12 @@ class Arbiter:
         idle = self.settings.data["idle"]
         night_off = self._quiet() and self.settings.data["quiet_hours"]["idle_off"]
         level = 0 if night_off else round(idle["brightness"] * self.settings.data["max_brightness"] / 255)
+        if idle["mode"] == "breath":
+            fx, speed = BREATH_FX[idle["breath_color"]], idle["breath_speed"]
+            return Look(("idle", "breath", fx, speed, level), Effect(fx, speed), level, PRIORITIES["idle"],
+                        "idle breath", "idle")
         rgb = tuple(idle["color"])
-        return Look(("idle", rgb, level), Color(rgb), level, PRIORITIES["idle"], "idle glow", "idle")
+        return Look(("idle", "glow", rgb, level), Color(rgb), level, PRIORITIES["idle"], "idle glow", "idle")
 
     async def _loop_steady(self, pattern: Sequence, level: int) -> None:
         while True:

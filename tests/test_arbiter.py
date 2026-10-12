@@ -436,3 +436,40 @@ async def test_run_loop_shutdown_stops_steady_sequence(arb, strip):
     n = len(strip.calls)
     await pump()
     assert len(strip.calls) == n
+
+
+# ---- idle breath ----------------------------------------------------------------
+async def test_idle_breath_uses_firmware_breath_effect(arb, settings, strip):
+    settings.update({"idle": {"mode": "breath", "breath_color": "cyan", "breath_speed": 3}})
+    await arb.tick()
+    assert strip.calls == [("power", True), ("effect", 0x66), ("speed", 3), ("brightness", 12)]
+    assert arb.snapshot()["current"]["pattern"] == "idle breath"
+
+
+async def test_switching_idle_mode_rerenders(arb, settings, strip):
+    await arb.tick()
+    assert strip.calls[-1] == IDLE
+    settings.update({"idle": {"mode": "breath", "breath_color": "purple"}})
+    await arb.tick()
+    assert strip.calls[-3:] == [("effect", 0x67), ("speed", 3), ("brightness", 12)]
+    settings.update({"idle": {"mode": "glow"}})
+    await arb.tick()
+    assert strip.calls[-1] == IDLE
+
+
+async def test_idle_breath_turns_off_in_quiet_hours(arb, settings, clock, strip):
+    settings.update({"idle": {"mode": "breath"}})
+    clock.set_time("23:30")
+    await arb.tick()
+    assert strip.calls[-1] == ("power", False)
+
+
+async def test_alert_interrupts_idle_breath_and_it_returns(arb, settings, strip):
+    settings.update({"idle": {"mode": "breath"}})
+    await arb.tick()
+    await arb.submit(Event("dns.down", "start"))
+    await settle(arb)
+    assert strip.calls[-3:] == [("effect", 0x67), ("speed", 5), ("brightness", 255)]
+    await arb.submit(Event("dns.down", "clear"))
+    await settle(arb)
+    assert strip.calls[-3:] == [("effect", 0x66), ("speed", 3), ("brightness", 12)]
