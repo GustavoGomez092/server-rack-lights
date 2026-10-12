@@ -192,3 +192,12 @@ async def test_high_state_silenced_at_night_chimes_in_the_morning(arb, clock, ch
     settings.update({"rules": {"dns.down": {"pattern": "red_breath"}}})   # another re-render
     await settle(arb)
     assert chimes.chimes == [("error", 70)]
+
+
+async def test_unforced_test_clicks_always_chime_at_day_volume(arb, clock, chimes):
+    """UI Test buttons (source "test") chime every click at day volume, even at night and within the cooldown."""
+    clock.set_time("02:10")
+    for _ in range(3):
+        await arb.submit(Event("internet.down", "oneshot", source="test", duration_s=8))
+        await settle(arb)
+    assert chimes.chimes == [("error", 70)] * 3

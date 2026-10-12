@@ -349,7 +349,8 @@ class Arbiter:
         try:
             pattern = self._pattern_of(rule)
             self._log(ev, "shown")
-            self._chime(rule, ev, force=ev.force)
+            # UI Test clicks always chime at day volume and skip the cooldown (spec §5), forced or not.
+            self._chime(rule, ev, force=ev.force or ev.source == "test")
             self._set_current(self._desc_of(rule), f"{ev.name} ({ev.source})")
             await self.player.show(pattern, level)
             if not isinstance(pattern, Sequence):
