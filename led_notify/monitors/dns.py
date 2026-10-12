@@ -5,6 +5,24 @@ from ..events import Event
 from .base import Debouncer, PollingMonitor
 
 
+def answered(exc: BaseException | None) -> bool:
+    """Did the DNS server send back ANY response?
+
+    During an internet outage AdGuard cannot reach its upstreams and answers SERVFAIL;
+    that still means AdGuard itself is up. Only timeouts and connection errors mean down.
+    """
+    import dns.resolver
+
+    if exc is None:
+        return True
+    if isinstance(exc, (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.YXDOMAIN)):
+        return True
+    if isinstance(exc, dns.resolver.NoNameservers):
+        # Each error is (server, tcp, port, exception_or_rcode, response); a response means it answered.
+        return any(err[-1] is not None for err in exc.kwargs.get("errors") or [])
+    return False  # LifetimeTimeout, connection refused, other I/O errors
+
+
 async def dns_ok(server: str, name: str, timeout_s: float = 2.0) -> bool:
     import dns.asyncresolver
 
@@ -13,9 +31,9 @@ async def dns_ok(server: str, name: str, timeout_s: float = 2.0) -> bool:
     resolver.lifetime = timeout_s
     try:
         await resolver.resolve(name, "A")
-        return True
-    except Exception:
-        return False
+    except Exception as e:
+        return answered(e)
+    return True
 
 
 class DnsMonitor(PollingMonitor):

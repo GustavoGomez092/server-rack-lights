@@ -2,7 +2,7 @@ import pytest
 
 from led_notify.events import Event
 from led_notify.monitors.base import Debouncer, Hysteresis, PollingMonitor
-from led_notify.monitors.dns import DnsMonitor
+from led_notify.monitors.dns import DnsMonitor, answered
 from led_notify.monitors.internet import InternetMonitor, parse_ping
 
 TARGETS = ("1.1.1.1", "8.8.8.8", "9.9.9.9")
@@ -197,3 +197,43 @@ async def test_slow_clears_despite_occasional_dropped_ping(settings, clock):
         clock.advance(10)
     assert ("internet.down", "start") not in names(events)
     assert ("internet.slow", "clear") in names(events)
+
+
+# ---- final fixes: AdGuard is up if it answers at all (F7) ---------------------------
+def _dns_errors(with_response: bool):
+    import dns.message
+    import dns.rcode
+
+    q = dns.message.make_query("cloudflare.com", "A")
+    if with_response:
+        r = dns.message.make_response(q)
+        r.set_rcode(dns.rcode.SERVFAIL)
+        return q, [("127.0.0.1", False, 53, "SERVFAIL", r)]
+    return q, [("127.0.0.1", False, 53, ConnectionRefusedError(111, "Connection refused"), None)]
+
+
+def test_any_dns_response_counts_as_up():
+    import dns.message
+    import dns.resolver
+
+    q, errors = _dns_errors(with_response=True)
+    assert answered(None)
+    assert answered(dns.resolver.NoNameservers(request=q, errors=errors))  # SERVFAIL: upstream down
+    assert answered(dns.resolver.NXDOMAIN(qnames=[q.question[0].name]))
+    assert answered(dns.resolver.NoAnswer(response=dns.message.make_response(q)))
+
+
+def test_timeouts_and_connection_errors_count_as_down():
+    import dns.resolver
+
+    q, errors = _dns_errors(with_response=False)
+    assert not answered(dns.resolver.NoNameservers(request=q, errors=errors))  # connection refused
+    assert not answered(dns.resolver.LifetimeTimeout(timeout=2.0, errors=[]))
+    assert not answered(OSError("network unreachable"))
+
+
+async def test_dns_ok_down_when_nothing_listens():
+    from led_notify.monitors import dns as dns_mod
+
+    # 127.0.0.1:53 may or may not run a resolver on a dev box; an unroutable TEST-NET address never answers.
+    assert await dns_mod.dns_ok("192.0.2.1", "cloudflare.com", timeout_s=0.3) is False
