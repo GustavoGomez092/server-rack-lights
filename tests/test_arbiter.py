@@ -329,7 +329,7 @@ async def test_oneshot_cancelled_before_start_does_not_freeze(arb, strip):
     await arb.submit(Event("ping", data={"key": "z"}))
     await settle(arb)
     assert arb.snapshot()["queue"] == [] and arb.snapshot()["playing"] is None
-    assert ("ping", "shown") in outcomes(arb)
+    assert ("ping", "skipped:priority") in outcomes(arb)  # drained (high state active)
 
 
 async def test_preempted_logged_once_when_started(arb, clock):
