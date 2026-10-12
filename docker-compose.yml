@@ -1,0 +1,48 @@
+name: led-notify
+services:
+  led-notify:
+    container_name: led-notify
+    image: led-notify:local
+    pull_policy: never
+    network_mode: host
+    restart: unless-stopped
+    cap_add: [NET_RAW, NET_ADMIN, SYS_RAWIO, SYS_ADMIN]
+    devices:
+      - /dev/nvme0:/dev/nvme0
+    environment:
+      STRIP_ADDRESS: "A6:15:50:62:0A:9D"
+      TZ: America/Los_Angeles
+      DATA_DIR: /data
+      PORT: "8787"
+    volumes:
+      - type: bind
+        source: /run/dbus/system_bus_socket
+        target: /run/dbus/system_bus_socket
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+      - type: bind
+        source: /DATA
+        target: /host/DATA
+        read_only: true
+      - type: bind
+        source: /DATA/AppData/led-notify/data
+        target: /data
+    labels:
+      icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/wled.png
+x-casaos:
+  main: led-notify
+  index: /
+  port_map: "8787"
+  scheme: http
+  author: gustavogomez092
+  category: Utilities
+  architectures: [amd64]
+  icon: https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons@main/png/wled.png
+  title:
+    en_us: LED Notify
+  tagline:
+    en_us: Homelab alerts on the Bluetooth LED strip
+  description:
+    en_us: Shows internet, DNS, device, disk, CPU and container events on the BanlanX SP548E strip. Webhook at /api/events.
