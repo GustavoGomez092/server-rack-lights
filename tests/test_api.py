@@ -146,3 +146,10 @@ def test_patterns_and_log(client):
     assert "red_breath" in p["named"] and len(p["effects"]) == 146
     client.post("/api/events", json={"name": "hello"})
     assert client.get("/api/log").json()[-1]["name"] == "hello"
+
+
+def test_ui_is_served(client):
+    r = client.get("/")
+    assert r.status_code == 200 and "<title>LED Notify</title>" in r.text
+    assert client.get("/app.js").status_code == 200
+    assert client.get("/style.css").status_code == 200

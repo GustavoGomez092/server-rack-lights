@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LED Notify</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>LED Notify</h1>
+    <span id="strip" class="pill">…</span>
+    <span id="quiet" class="pill quiet" hidden>quiet hours</span>
+  </div>
+  <div class="row"><span class="label">Now</span><span id="now">—</span></div>
+  <div class="row"><span class="label">Active</span><span id="active"></span></div>
+  <div class="row"><span class="label">Monitors</span><span id="monitors"></span></div>
+  <div class="row"><span class="label">Mode</span><span id="manual-status">Automatic</span></div>
+  <div id="warnings"></div>
+</header>
+<nav id="tabs">
+  <button data-tab="test" class="active">Test</button>
+  <button data-tab="manual">Manual</button>
+  <button data-tab="devices">Devices</button>
+  <button data-tab="rules">Rules</button>
+  <button data-tab="log">Log</button>
+</nav>
+<main>
+  <section id="tab-test">
+    <h2>Events</h2>
+    <label class="inline"><input type="checkbox" id="force"> Force (ignore priority &amp; quiet hours)</label>
+    <div id="event-buttons" class="grid"></div>
+    <h2>Pattern gallery</h2>
+    <input id="gallery-search" type="search" placeholder="Search patterns and effects…">
+    <div id="gallery" class="grid"></div>
+  </section>
+  <section id="tab-manual" hidden>
+    <div class="card form">
+      <label>Color <input type="color" id="m-color" value="#00b3a4"></label>
+      <label>Brightness <input type="range" id="m-bright" min="1" max="255" value="128"><output id="m-bright-out">128</output></label>
+      <button id="m-set-color">Set color</button>
+    </div>
+    <div class="card form">
+      <label>Effect <select id="m-effect"></select></label>
+      <label>Speed <input type="range" id="m-speed" min="1" max="10" value="5"><output id="m-speed-out">5</output></label>
+      <button id="m-set-effect">Set effect</button>
+    </div>
+    <div class="row gap">
+      <button id="m-off" class="secondary">Turn off</button>
+      <button id="m-resume">Resume auto</button>
+    </div>
+  </section>
+  <section id="tab-devices" hidden>
+    <div class="row gap">
+      <select id="dev-filter">
+        <option value="all">All devices</option>
+        <option value="unknown">Unknown only</option>
+        <option value="online">Online only</option>
+      </select>
+      <span id="dev-count" class="muted"></span>
+    </div>
+    <div class="table-wrap">
+      <table id="dev-table">
+        <thead><tr><th>Name</th><th>MAC / vendor</th><th>IP</th><th>Seen</th><th>Known</th><th>Announce</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+  <section id="tab-rules" hidden>
+    <h2>Rules</h2>
+    <div class="table-wrap">
+      <table id="rules-table">
+        <thead><tr><th>Event</th><th>On</th><th>Priority</th><th>Pattern</th><th>Duration (s)</th><th>Quiet hours</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button id="save-rules">Save rules</button>
+    <h2>Settings</h2>
+    <form id="settings-form" class="settings" onsubmit="return false"></form>
+    <button id="save-settings">Save settings</button>
+  </section>
+  <section id="tab-log" hidden>
+    <div class="table-wrap">
+      <table id="log-table">
+        <thead><tr><th>Time</th><th>Event</th><th>Source</th><th>Outcome</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<div id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
