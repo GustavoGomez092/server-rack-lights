@@ -29,19 +29,29 @@ async def adguard_blocked_times(url: str, user: str, password: str, limit: int =
         return parse_querylog_times(resp.json())
 
 
-class SpikeDetector:
-    MIN_HISTORY = 5  # no baseline yet right after a restart: never alert on the first polls
+MIN_HISTORY = 5  # no baseline yet right after a restart: never alert on the first polls
+COOLDOWN_POLLS = 15  # after an alert, stay quiet for 15 polls (15 min at interval_s=60)
 
+
+class SpikeDetector:
     def __init__(self):
         self._history: deque[int] = deque(maxlen=60)
+        self._cooldown = 0
 
     def feed(self, count: int, min_blocked: int, factor: float) -> bool:
-        if len(self._history) < self.MIN_HISTORY:
+        if len(self._history) < MIN_HISTORY:
+            self._history.append(count)
+            return False
+        if self._cooldown > 0:
+            # No alerts, and every sample joins the baseline: a rate that stays high becomes the new normal.
+            self._cooldown -= 1
             self._history.append(count)
             return False
         avg = sum(self._history) / len(self._history)
         spike = count > min_blocked and count > factor * avg
-        if not spike:  # keep spikes out of the baseline they are measured against
+        if spike:
+            self._cooldown = COOLDOWN_POLLS
+        else:  # a lone spike stays out of the baseline it is measured against
             self._history.append(count)
         return spike
 

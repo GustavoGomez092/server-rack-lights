@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from led_notify.monitors.adguard import AdguardMonitor, SpikeDetector, parse_querylog_times
+from led_notify.monitors.adguard import COOLDOWN_POLLS, AdguardMonitor, SpikeDetector, parse_querylog_times
 from led_notify.monitors.base import MonitorDisabled
 from led_notify.monitors.docker import DockerDeathFilter, DockerMonitor
 
@@ -67,8 +67,27 @@ def test_spike_detector():
     s = SpikeDetector()
     assert [s.feed(10, 50, 3) for _ in range(5)] == [False] * 5  # warm-up: baseline of 10
     assert s.feed(200, 50, 3) is True       # 200 > 50 and > 3 x 10
-    assert s.feed(200, 50, 3) is True       # the spike did not raise the baseline
-    assert s.feed(40, 50, 3) is False       # below min_blocked
+    assert s.feed(40, 50, 3) is False       # below min_blocked (and in cooldown)
+
+
+def test_sustained_elevated_rate_fires_once_then_quiets():
+    s = SpikeDetector()
+    for _ in range(5):
+        s.feed(10, 50, 3)
+    fired = [s.feed(200, 50, 3) for _ in range(60)]  # the rate jumps and stays there for an hour
+    assert fired[0] is True and fired.count(True) == 1  # cooldown samples made 200 the new baseline
+
+
+def test_distinct_spike_after_cooldown_fires_again():
+    s = SpikeDetector()
+    for _ in range(5):
+        s.feed(10, 50, 3)
+    assert s.feed(200, 50, 3) is True
+    assert [s.feed(10, 50, 3) for _ in range(COOLDOWN_POLLS - 1)] == [False] * (COOLDOWN_POLLS - 1)
+    assert s.feed(200, 50, 3) is False      # still inside the cooldown
+    assert s.feed(10, 50, 3) is False       # cooldown over; back to normal
+    assert s.feed(200, 50, 3) is True       # a new, separate spike alerts again
+    assert s.feed(200, 50, 3) is False      # ...and starts a new cooldown
 
 
 def test_spike_detector_never_fires_before_five_samples():
