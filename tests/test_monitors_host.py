@@ -170,3 +170,20 @@ async def test_smart_health_timeout_kills_process(monkeypatch):
     with pytest.raises(RuntimeError, match="smartctl timed out on /dev/nvme0"):
         await disk.smart_health("/dev/nvme0")
     assert proc.killed
+
+
+async def test_usage_event_survives_smart_failure(settings, clock):
+    async def smart(device):
+        raise RuntimeError("smartctl missing")
+
+    m = DiskMonitor(settings, clock, usage=lambda p: 91.0, smart=smart)
+    beats, emitted = [], []
+    m.heartbeat = lambda: beats.append(1)
+
+    async def emit(ev):
+        emitted.append((ev.name, ev.kind))
+
+    with pytest.raises(RuntimeError, match="smartctl missing"):
+        await m.run(emit)
+    assert emitted == [("disk.full", "start")]
+    assert beats == []

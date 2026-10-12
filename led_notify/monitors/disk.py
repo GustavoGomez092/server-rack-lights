@@ -65,10 +65,27 @@ class DiskMonitor(PollingMonitor):
 
     async def check(self) -> list[Event]:
         events = self.check_usage()
+        events += await self.smart_step()
+        return events
+
+    async def run(self, emit) -> None:
+        # Usage events go out before the SMART probe, so a probe failure cannot drop them.
+        # The heartbeat still fires only after a fully successful cycle.
+        while True:
+            for ev in self.check_usage():
+                await emit(ev)
+            smart_events = await self.smart_step()
+            self.heartbeat()
+            for ev in smart_events:
+                await emit(ev)
+            await self.clock.sleep(self.interval_s())
+
+    async def smart_step(self) -> list[Event]:
         now = self.clock.monotonic()
-        if self._last_smart is None or now - self._last_smart >= self.cfg["smart_interval_s"]:
-            events += await self.check_smart()
-            self._last_smart = now
+        if self._last_smart is not None and now - self._last_smart < self.cfg["smart_interval_s"]:
+            return []
+        events = await self.check_smart()
+        self._last_smart = now
         return events
 
     def check_usage(self) -> list[Event]:
