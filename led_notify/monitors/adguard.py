@@ -30,13 +30,20 @@ async def adguard_blocked_times(url: str, user: str, password: str, limit: int =
 
 
 class SpikeDetector:
+    MIN_HISTORY = 5  # no baseline yet right after a restart: never alert on the first polls
+
     def __init__(self):
         self._history: deque[int] = deque(maxlen=60)
 
     def feed(self, count: int, min_blocked: int, factor: float) -> bool:
-        avg = sum(self._history) / len(self._history) if self._history else 0.0
-        self._history.append(count)
-        return count > min_blocked and count > factor * avg
+        if len(self._history) < self.MIN_HISTORY:
+            self._history.append(count)
+            return False
+        avg = sum(self._history) / len(self._history)
+        spike = count > min_blocked and count > factor * avg
+        if not spike:  # keep spikes out of the baseline they are measured against
+            self._history.append(count)
+        return spike
 
 
 class AdguardMonitor(PollingMonitor):

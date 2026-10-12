@@ -65,9 +65,17 @@ def test_parse_querylog_times_handles_nanoseconds_and_z():
 
 def test_spike_detector():
     s = SpikeDetector()
-    assert s.feed(10, 50, 3) is False
+    assert [s.feed(10, 50, 3) for _ in range(5)] == [False] * 5  # warm-up: baseline of 10
     assert s.feed(200, 50, 3) is True       # 200 > 50 and > 3 x 10
-    assert s.feed(60, 50, 3) is False       # 60 < 3 x avg(10, 200)
+    assert s.feed(200, 50, 3) is True       # the spike did not raise the baseline
+    assert s.feed(40, 50, 3) is False       # below min_blocked
+
+
+def test_spike_detector_never_fires_before_five_samples():
+    s = SpikeDetector()
+    assert [s.feed(1000, 50, 3) for _ in range(4)] == [False] * 4  # e.g. first polls after a restart
+    assert s.feed(10, 50, 3) is False
+    assert s.feed(5000, 50, 3) is True      # 5 samples now: 5000 > 3 x avg(1000 x 4, 10)
 
 
 async def test_adguard_disabled_without_credentials(settings, clock):
@@ -78,13 +86,26 @@ async def test_adguard_disabled_without_credentials(settings, clock):
 async def test_adguard_spike(settings, clock):
     settings.update({"adguard": {"username": "admin", "password": "pw"}})
     now = clock.now()
-    recent = [now - timedelta(seconds=s) for s in range(60)] + [now - timedelta(minutes=5)]
+    burst = [now - timedelta(seconds=s) for s in range(60)] + [now - timedelta(minutes=5)]
+    served = {"times": burst[-1:]}  # baseline: nothing blocked in the last minute
 
     async def fetch(url, user, password):
         assert (url, user, password) == ("http://127.0.0.1:3001", "admin", "pw")
-        return recent
+        return served["times"]
 
     m = AdguardMonitor(settings, clock, fetch=fetch)
+    for _ in range(5):
+        assert await m.check() == []
+    served["times"] = burst
     evs = await m.check()
     assert [e.name for e in evs] == ["adguard.block_spike"] and evs[0].data == {"blocked_last_min": 60}
-    assert await m.check() == []
+
+
+async def test_adguard_first_poll_after_restart_does_not_alert(settings, clock):
+    settings.update({"adguard": {"username": "admin", "password": "pw"}})
+    now = clock.now()
+
+    async def fetch(url, user, password):
+        return [now - timedelta(seconds=s) for s in range(60)]
+
+    assert await AdguardMonitor(settings, clock, fetch=fetch).check() == []
