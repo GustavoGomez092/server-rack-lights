@@ -2,7 +2,7 @@ import pytest
 
 from led_notify.audio.fake import FakeChimes
 from led_notify.driver.fake import FakeStrip
-from led_notify.engine.arbiter import Arbiter
+from led_notify.engine.arbiter import CHIME_COOLDOWN_S, Arbiter
 from led_notify.engine.player import Player
 from led_notify.events import Event
 from tests.fakes import settle
@@ -114,3 +114,81 @@ async def test_chime_exception_never_breaks_lights(clock, settings):
     await arb.submit(Event("dns.down", "start"))
     await settle(arb)
     assert ("effect", 0x67) in strip.calls
+
+
+# ---- cooldown (no nagging) -----------------------------------------------------------
+async def test_crash_looping_oneshot_chimes_once_per_cooldown(arb, clock, chimes):
+    for _ in range(9):                                   # every 60 s for 9 minutes
+        await arb.submit(Event("container.died", source="docker", data={"key": "web"}))
+        await settle(arb)
+        clock.advance(60)
+    assert chimes.chimes == [("error", 70)]
+    assert [e["outcome"] for e in arb.log].count("shown") == 9   # lights still flash every time
+    clock.advance(CHIME_COOLDOWN_S)
+    await arb.submit(Event("container.died", source="docker", data={"key": "web"}))
+    await settle(arb)
+    assert chimes.chimes == [("error", 70), ("error", 70)]
+
+
+async def test_flapping_critical_state_at_night_chimes_once_per_cooldown(arb, clock, chimes):
+    clock.set_time("03:00")
+    for _ in range(9):
+        await arb.submit(Event("internet.down", "start", source="internet"))
+        await settle(arb)
+        clock.advance(30)
+        await arb.submit(Event("internet.down", "clear", source="internet"))
+        await settle(arb)
+        clock.advance(30)
+    assert chimes.chimes == [("error", 30)]
+    clock.advance(CHIME_COOLDOWN_S)
+    await arb.submit(Event("internet.down", "start", source="internet"))
+    await settle(arb)
+    assert chimes.chimes == [("error", 30), ("error", 30)]
+
+
+async def test_force_bypasses_cooldown_and_does_not_start_it(arb, clock, chimes):
+    for _ in range(3):
+        await arb.submit(Event("container.died", source="test", force=True))
+        await settle(arb)
+    assert chimes.chimes == [("error", 70)] * 3
+    await arb.submit(Event("container.died", source="docker", data={"key": ""}))
+    await settle(arb)
+    assert chimes.chimes == [("error", 70)] * 4                  # forced chimes left no cooldown behind
+    await arb.submit(Event("container.died", source="test", force=True))
+    await settle(arb)
+    assert chimes.chimes == [("error", 70)] * 5                  # and force ignores an active cooldown
+
+
+async def test_cooldown_is_per_data_key(arb, clock, chimes):
+    await arb.submit(Event("container.died", source="docker", data={"key": "web"}))
+    await arb.submit(Event("container.died", source="docker", data={"key": "db"}))
+    await settle(arb)
+    clock.advance(60)
+    await arb.submit(Event("container.died", source="docker", data={"key": "web"}))
+    await settle(arb)
+    assert chimes.chimes == [("error", 70), ("error", 70)]
+
+
+async def test_cooldown_map_is_pruned(arb, clock, chimes):
+    for i in range(5):
+        await arb.submit(Event("container.died", source="docker", data={"key": f"c{i}"}))
+        await settle(arb)
+    clock.advance(CHIME_COOLDOWN_S + 1)
+    await arb.submit(Event("container.died", source="docker", data={"key": "new"}))
+    await settle(arb)
+    assert list(arb._chimed_at) == ["container.died|new"]
+
+
+# ---- a state silenced by quiet hours chimes once they end ------------------------------
+async def test_high_state_silenced_at_night_chimes_in_the_morning(arb, clock, chimes):
+    clock.set_time("23:30")
+    await arb.submit(Event("dns.down", "start"))          # high: dims at night, no sound
+    await settle(arb)
+    assert chimes.chimes == []
+    clock.set_time("07:00")                               # brightness changes -> re-render
+    await settle(arb)
+    assert chimes.chimes == [("error", 70)]
+    settings = arb.settings
+    settings.update({"rules": {"dns.down": {"pattern": "red_breath"}}})   # another re-render
+    await settle(arb)
+    assert chimes.chimes == [("error", 70)]
