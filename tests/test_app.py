@@ -29,6 +29,7 @@ def test_build_monitors_has_all_seven(tmp_path):
 
 def test_app_runs_with_fake_strip_and_plays_events(tmp_path):
     app, svc = build(tmp_path / "data", "", fake_strip=True, monitors=False)
+    svc.settings.update({"quiet_hours": {"enabled": False}})  # the real wall clock may be in quiet hours
     with TestClient(app) as client:
         wait_for(lambda: client.get("/api/state").json()["current"])
         assert client.get("/api/state").json()["current"]["reason"] == "idle"
