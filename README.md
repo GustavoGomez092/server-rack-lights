@@ -25,3 +25,7 @@ uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e '.[de
 
 The strip accepts one Bluetooth connection: while the service runs, the BanlanX phone app can't connect.
 Design: `docs/superpowers/specs/2026-10-11-led-notify-design.md`.
+
+Note: `casaos-cli app-management install` registered the app compose under `/var/lib/casaos/apps/led-notify/`
+but never created the container, so it was started with
+`sudo docker compose -f /DATA/AppData/led-notify/src/docker-compose.yml up -d`. Later `./deploy.sh` runs use the registered compose.
