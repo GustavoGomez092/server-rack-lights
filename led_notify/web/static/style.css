@@ -8,6 +8,7 @@
   :root { --bg: #111418; --panel: #1a1e24; --text: #e6e9ee; --muted: #8a94a3; --border: #2b313a; --accent: #26c6b5; color-scheme: dark; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
 header, nav, main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
 header { padding-top: 16px; display: grid; gap: 6px; }

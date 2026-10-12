@@ -161,7 +161,16 @@ $("#dev-table").addEventListener("change", (e) => {
   if (e.target.classList.contains("dev-name")) patch = { name: e.target.value.trim() };
   if (e.target.classList.contains("dev-known")) patch = { known: e.target.checked };
   if (e.target.classList.contains("dev-announce")) patch = { announce_arrival: e.target.checked };
-  if (patch) act(() => api("PATCH", `/api/devices/${encodeURIComponent(tr.dataset.mac)}`, patch), "Saved");
+  if (patch) {
+    act(async () => {
+      try {
+        await api("PATCH", `/api/devices/${encodeURIComponent(tr.dataset.mac)}`, patch);
+      } catch (err) {
+        await loadDevices();
+        throw err;
+      }
+    }, "Saved");
+  }
 });
 $("#dev-table").addEventListener("click", (e) => {
   if (!e.target.classList.contains("dev-forget")) return;
