@@ -41,7 +41,8 @@ services:
 x-casaos:
   main: led-notify
   index: /
-  port_map: "8787"
+  hostname: lights.home.lab
+  port_map: "80"
   scheme: http
   author: gustavogomez092
   category: Utilities
