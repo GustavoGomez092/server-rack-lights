@@ -8,6 +8,8 @@ POLL_S=5
 FALLBACK_S=60   # led-notify unreachable this long: follow the default quiet hours (23:00-07:00)
 
 log() { echo "$(date '+%F %T') $*"; }
+# cage + Chromium spin a CPU core when no monitor is connected, so the kiosk only runs while one is.
+monitor() { grep -qx connected /sys/class/drm/card*-*/status 2>/dev/null; }
 randr() { WAYLAND_DISPLAY=wayland-0 wlr-randr "$@"; }
 
 mkdir -p -m 700 "$XDG_RUNTIME_DIR"
@@ -25,17 +27,25 @@ start_cage() {
   log "kiosk started (pid $CAGE)"
 }
 
-want=""; applied=""; last_ok=$(date +%s); CAGE=0
+want=""; applied=""; last_ok=$(date +%s); CAGE=0; waiting=""
 sleep 1
-start_cage
 while true; do
-  sleep "$POLL_S"
+  if ! monitor; then
+    if kill -0 "$CAGE" 2>/dev/null; then
+      log "monitor unplugged: stopping kiosk"
+      kill "$CAGE"; wait "$CAGE" 2>/dev/null
+    fi
+    [ -n "$waiting" ] || log "waiting for a monitor on the DisplayPort"
+    waiting=1; sleep "$POLL_S"; continue
+  fi
+  waiting=""
   if ! kill -0 "$CAGE" 2>/dev/null; then
-    log "kiosk exited: $(tail -n 3 /tmp/cage.log | tr '\n' ' ')"
-    sleep 5
+    [ "$CAGE" = 0 ] || log "kiosk exited: $(tail -n 3 /tmp/cage.log | tr '\n' ' ')"
     start_cage
+    sleep "$POLL_S"
     continue
   fi
+  sleep "$POLL_S"
   if body=$(curl -fsS -m 3 "$API" 2>/dev/null); then
     last_ok=$(date +%s)
     case "$body" in *'"power":"off"'*) want=off ;; *) want=on ;; esac
