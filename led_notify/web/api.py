@@ -291,8 +291,7 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
         if last and last["name"] not in {a["name"] for a in active}:
             age = (svc.clock.now() - datetime.fromisoformat(last["time"])).total_seconds()
             if age < svc.settings.data["screen"]["wake_min"] * 60:
-                rule = svc.settings.rule(last["name"]) or {}
-                items.append({"text": label(last["name"]), "since": last["time"], "priority": rule.get("priority")})
+                items.append({"text": label(last["name"]), "since": last["time"], "priority": last["priority"]})
         return items
 
     def screen_data() -> dict:

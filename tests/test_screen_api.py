@@ -85,3 +85,10 @@ def test_build_wires_screen(tmp_path):
     assert svc.arbiter.on_shown == svc.screen.note_alert
     with TestClient(app) as c:
         assert c.get("/api/screen").status_code == 200
+
+
+async def test_banner_priority_for_webhook_alert_without_rule(client, svc):
+    await svc.arbiter.submit(Event("backup.failed", priority="high", look={"pattern": "white_flash"}))
+    await settle(svc.arbiter)
+    banner = client.get("/api/screen/data").json()["banner"]
+    assert banner == [{"text": "Backup failed", "since": banner[0]["since"], "priority": "high"}]

@@ -20,7 +20,8 @@ class ScreenSchedule:
 
     def note_alert(self, name: str, rule: dict) -> None:
         """Called for every alert the strip shows; during quiet hours that is only `dim` rules."""
-        self._last_alert = {"name": name, "time": self.clock.now().isoformat(timespec="seconds")}
+        self._last_alert = {"name": name, "time": self.clock.now().isoformat(timespec="seconds"),
+                            "priority": rule.get("priority")}
         if self._quiet():
             self._wake_until = self.clock.monotonic() + self.settings.data["screen"]["wake_min"] * 60
 
