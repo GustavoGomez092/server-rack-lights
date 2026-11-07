@@ -138,3 +138,14 @@ async def test_sampler_survives_part_failure(clock):
     assert latest["memory"] == {"used_bytes": 1, "total_bytes": 2}
     assert [a["name"] for a in latest["apps"]] == ["App0", "App1", "App2", "App3", "App4"]
     assert latest["uptime_s"] == 100.0 and latest["cpu_pct"] == 0.0
+
+
+def test_disk_statvfs_error_reads_as_not_connected(tmp_path, monkeypatch):
+    # A USB drive yanked while mounted can make statvfs fail; the row must stay, as "not connected".
+    monkeypatch.setattr("led_notify.stats.host.os.path.ismount", lambda p: True)
+
+    def gone(path):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr("led_notify.stats.host.os.statvfs", gone)
+    assert disk("Backup", str(tmp_path))["mounted"] is False

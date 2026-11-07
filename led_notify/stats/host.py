@@ -36,9 +36,13 @@ def uptime_s(path: str = "/proc/uptime") -> float:
 
 def disk(label: str, path: str) -> dict:
     """Size and use like `df`; a drive that is not mounted (e.g. the USB backup unplugged) has no numbers."""
+    absent = {"label": label, "mounted": False, "used_bytes": None, "total_bytes": None, "pct": None}
     if not os.path.ismount(path):
-        return {"label": label, "mounted": False, "used_bytes": None, "total_bytes": None, "pct": None}
-    st = os.statvfs(path)
+        return absent
+    try:
+        st = os.statvfs(path)
+    except OSError:  # e.g. a USB drive pulled while mounted
+        return absent
     used = (st.f_blocks - st.f_bfree) * st.f_frsize
     usable = used + st.f_bavail * st.f_frsize  # reserved blocks count as unavailable, as in df's Use%
     return {"label": label, "mounted": True, "used_bytes": used, "total_bytes": st.f_blocks * st.f_frsize,

@@ -33,6 +33,8 @@ services:
         source: /DATA
         target: /host/DATA
         read_only: true
+        bind:
+          propagation: rslave  # drives (re)mounted under /DATA after start are seen by the rack screen
       - type: bind
         source: /DATA/AppData/led-notify/data
         target: /data

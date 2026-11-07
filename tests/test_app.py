@@ -77,3 +77,21 @@ def test_audio_device_follows_settings_without_restart(tmp_path):
     assert svc.audio.status()["device"] == "plughw:1,0" and svc.audio.status()["mode"] == "silent"
     svc.settings.update({"audio": {"device": "plughw:2,0"}})
     assert svc.audio.player.device == "plughw:2,0"
+
+
+def test_main_bounds_graceful_shutdown(tmp_path, monkeypatch):
+    # The rack screen keeps an SSE stream open forever; without a bound uvicorn never reaches the
+    # lifespan shutdown that disconnects the strip (docker then SIGKILLs it, leaving a stale BlueZ link).
+    import led_notify.app as app_mod
+    seen = {}
+    monkeypatch.setattr(app_mod.uvicorn, "run", lambda app, **kw: seen.update(kw))
+    app_mod.main(["--fake-strip", "--no-monitors", "--no-audio", "--data-dir", str(tmp_path)])
+    assert 0 < seen.get("timeout_graceful_shutdown", 0) <= 5
+
+
+def test_compose_data_mount_follows_host_mounts():
+    # rslave: the Backup / Movies SSD drives plugged in or pulled after start show up in the rack screen.
+    from pathlib import Path
+    text = (Path(__file__).parent.parent / "docker-compose.yml").read_text()
+    block = text.split("target: /host/DATA", 1)[1].split("- type:", 1)[0]
+    assert "propagation: rslave" in block
