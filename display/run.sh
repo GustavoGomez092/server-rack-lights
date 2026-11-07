@@ -31,15 +31,16 @@ want=""; applied=""; last_ok=$(date +%s); CAGE=0; waiting=""
 sleep 1
 while true; do
   if ! monitor; then
-    if kill -0 "$CAGE" 2>/dev/null; then
+    if [ "$CAGE" != 0 ] && kill -0 "$CAGE" 2>/dev/null; then  # kill -0 0 would hit our own group
       log "monitor unplugged: stopping kiosk"
       kill "$CAGE"; wait "$CAGE" 2>/dev/null
     fi
+    CAGE=0
     [ -n "$waiting" ] || log "waiting for a monitor on the DisplayPort"
     waiting=1; sleep "$POLL_S"; continue
   fi
   waiting=""
-  if ! kill -0 "$CAGE" 2>/dev/null; then
+  if [ "$CAGE" = 0 ] || ! kill -0 "$CAGE" 2>/dev/null; then
     [ "$CAGE" = 0 ] || log "kiosk exited: $(tail -n 3 /tmp/cage.log | tr '\n' ' ')"
     start_cage
     sleep "$POLL_S"
