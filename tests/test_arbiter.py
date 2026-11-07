@@ -473,3 +473,46 @@ async def test_alert_interrupts_idle_breath_and_it_returns(arb, settings, strip)
     await arb.submit(Event("dns.down", "clear"))
     await settle(arb)
     assert strip.calls[-3:] == [("effect", 0x66), ("speed", 3), ("brightness", 12)]
+
+
+# ---- on_shown (rack screen wake) ------------------------------------------------
+@pytest.fixture
+async def seen_arb(strip, clock, settings, hub):
+    seen = []
+    arbiter = Arbiter(Player(strip, clock), settings, clock, hub, on_shown=lambda n, r: seen.append((n, r["priority"])))
+    arbiter.seen = seen
+    yield arbiter
+    await arbiter.stop_steady()
+
+
+async def test_on_shown_oneshot(seen_arb):
+    await seen_arb.submit(Event("device.new", data={"key": "a"}))
+    await settle(seen_arb)
+    assert seen_arb.seen == [("device.new", "normal")]
+
+
+async def test_on_shown_quiet_dim_state_once(seen_arb, clock):
+    clock.set_time("22:59")
+    await seen_arb.submit(Event("internet.down", "start"))
+    await settle(seen_arb)
+    clock.set_time("23:30")  # dims: re-rendered, but it is the same alert
+    await settle(seen_arb)
+    assert seen_arb.seen == [("internet.down", "critical")]
+
+
+async def test_on_shown_not_for_suppressed(seen_arb, clock):
+    clock.set_time("23:30")
+    await seen_arb.submit(Event("device.known_arrived", data={"key": "a"}))
+    await seen_arb.submit(Event("internet.slow", "start"))
+    await settle(seen_arb)
+    assert seen_arb.seen == []
+
+
+async def test_on_shown_error_is_swallowed(strip, clock, settings):
+    def boom(name, rule):
+        raise RuntimeError("screen broke")
+    arbiter = Arbiter(Player(strip, clock), settings, clock, on_shown=boom)
+    await arbiter.submit(Event("dns.down", "start"))
+    await settle(arbiter)
+    assert effects(strip)[-1] == 0x67
+    await arbiter.stop_steady()

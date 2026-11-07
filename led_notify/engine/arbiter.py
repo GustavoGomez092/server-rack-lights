@@ -38,7 +38,7 @@ class _State:
 
 
 class Arbiter:
-    def __init__(self, player, settings, clock, hub=None, log_size: int = 200, chimes=None):
+    def __init__(self, player, settings, clock, hub=None, log_size: int = 200, chimes=None, on_shown=None):
         self.player = player
         self.settings = settings
         self.clock = clock
@@ -57,6 +57,8 @@ class Arbiter:
         self._chimed_states: set[int] = set()  # state seqs whose first-display chime is handled
         self._chimed_at: dict[str, float] = {}   # "name|key" -> monotonic time of its last chime
         self._wake = asyncio.Event()
+        self.on_shown = on_shown  # (event name, rule) for each alert the strip shows; the rack screen listens
+        self._shown_states: set[int] = set()  # state seqs already reported to on_shown
 
     # ---- public API ------------------------------------------------------------
     @property
@@ -181,6 +183,7 @@ class Arbiter:
             self._set_current(base.desc, base.reason)
             if base.key[0] == "state":
                 self._chime_state(base.key)
+                self._report_state(base.key)
 
     # ---- internals ---------------------------------------------------------------
     def _rule_for(self, ev: Event) -> dict:
@@ -263,6 +266,23 @@ class Arbiter:
         if self._chime(self._live_rule(st), st.event):
             self._chimed_states.add(seq)
 
+    def _report(self, name: str, rule: dict) -> None:
+        if self.on_shown is None:
+            return
+        try:
+            self.on_shown(name, rule)
+        except Exception:
+            log.exception("on_shown(%s) failed", name)
+
+    def _report_state(self, key: tuple) -> None:
+        """A state is reported the first time it is displayed, not again when it re-renders (e.g. dims)."""
+        _, name, seq, *_ = key
+        st = self._states.get(name)
+        if seq in self._shown_states or st is None or st.seq != seq:
+            return
+        self._shown_states.add(seq)
+        self._report(name, self._live_rule(st))
+
     def _manual_active(self) -> dict | None:
         if self._manual and self.clock.monotonic() >= self._manual["expires"]:
             self._manual = None
@@ -284,6 +304,7 @@ class Arbiter:
         if st is None:
             return "ignored:not_active", None
         self._chimed_states.discard(st.seq)
+        self._shown_states.discard(st.seq)
         name = self._live_rule(st).get("clear_followup")
         followup = Event(name, "oneshot", source=ev.source, data=dict(ev.data)) if name else None
         return "cleared", followup
@@ -351,6 +372,7 @@ class Arbiter:
             self._log(ev, "shown")
             # UI Test clicks always chime at day volume and skip the cooldown (spec §5), forced or not.
             self._chime(rule, ev, force=ev.force or ev.source == "test")
+            self._report(ev.name, rule)
             self._set_current(self._desc_of(rule), f"{ev.name} ({ev.source})")
             await self.player.show(pattern, level)
             if not isinstance(pattern, Sequence):
