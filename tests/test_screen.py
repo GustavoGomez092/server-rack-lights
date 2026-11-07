@@ -10,9 +10,12 @@ LA = (34.05, -118.24)
 
 
 def test_screen_defaults(settings):
-    assert settings.data["screen"] == {"wake_min": 5, "latitude": 34.05, "longitude": -118.24}
+    assert settings.data["screen"] == {"wake_min": 5, "latitude": 34.05, "longitude": -118.24,
+                                       "brightness_day": 100, "brightness_night": 100}
     with pytest.raises(SettingsError):
         settings.update({"screen": {"wake_min": 0}})
+    with pytest.raises(SettingsError):
+        settings.update({"screen": {"brightness_day": 5}})  # never dim the screen to black by accident
     with pytest.raises(SettingsError):
         settings.update({"screen": {"latitude": 91}})
 
@@ -115,3 +118,19 @@ def test_day_alert_does_not_set_wake(settings, clock):
     st = s.state()
     assert st["last_alert"]["name"] == "container.died"
     assert st["awake_until"] is None
+
+
+def test_brightness_follows_theme(settings, clock):
+    settings.update({"screen": {"brightness_day": 60, "brightness_night": 35}})
+    assert _sched(settings, clock, "12:00").state()["brightness"] == 60   # light
+    assert _sched(settings, clock, "21:00").state()["brightness"] == 35   # dark evening
+    s = _sched(settings, clock, "02:00")
+    s.note_alert("internet.down", DIM)
+    assert s.state()["brightness"] == 35                                  # woken at night
+
+
+def test_brightness_change_applies_without_restart(settings, clock):
+    s = _sched(settings, clock, "12:00")
+    assert s.state()["brightness"] == 100
+    settings.update({"screen": {"brightness_day": 70}})
+    assert s.state()["brightness"] == 70

@@ -190,7 +190,8 @@ const FIELDS = [
     ["idle.breath_color", "select", "Breath color", ["red", "green", "blue", "yellow", "cyan", "purple", "white"]],
     ["idle.breath_speed", "number", "Breath speed (1-10)"], ["idle.brightness", "number", "Idle brightness (0-255)"],
     ["max_brightness", "number", "Max brightness (0-255)"], ["manual_timeout_min", "number", "Manual timeout (min)"]]],
-  ["Rack screen", [["screen.wake_min", "number", "Wake at night for (min)"],
+  ["Rack screen", [["screen.brightness_day", "range", "Brightness, light look (%)", [10, 100]],
+    ["screen.brightness_night", "range", "Brightness, dark look (%)", [10, 100]], ["screen.wake_min", "number", "Wake at night for (min)"],
     ["screen.latitude", "number", "Latitude (for sunrise/sunset)"], ["screen.longitude", "number", "Longitude"]]],
   ["Audio", [["audio.enabled", "checkbox", "Chimes enabled"], ["audio.volume_pct", "number", "Volume % (day)"],
     ["audio.night_volume_pct", "number", "Night volume % (critical only)"]]],
@@ -249,6 +250,7 @@ function renderSettings() {
     if (type === "checkbox") return `<label class="inline"><input type="checkbox" data-path="${path}" ${v ? "checked" : ""}> ${esc(label)}</label>`;
     if (type === "color") return `<label>${esc(label)} <input type="color" data-path="${path}" data-type="color" value="${rgbToHex(v)}"></label>`;
     if (type === "select") return `<label>${esc(label)} <select data-path="${path}" data-type="select">${opts(choices, v)}</select></label>`;
+    if (type === "range") return `<label>${esc(label)} <input type="range" min="${choices[0]}" max="${choices[1]}" data-path="${path}" data-type="range" value="${esc(v)}"><output>${esc(v)}</output></label>`;
     if (type === "secret") return `<label>${esc(label)} <input type="password" data-path="${path}" data-type="secret" autocomplete="new-password" placeholder="${v && v.set ? "set — leave blank to keep" : "not set"}"></label>`;
     const step = type === "number" ? ' step="any"' : "";
     return `<label>${esc(label)} <input type="${type}"${step} data-path="${path}" data-type="${type}" value="${esc(v)}"></label>`;
@@ -261,10 +263,21 @@ $("#save-settings").addEventListener("click", () => {
     if (el.type === "checkbox") setPath(patch, el.dataset.path, el.checked);
     else if (t === "secret") { if (el.value) setPath(patch, el.dataset.path, el.value); }
     else if (t === "color") setPath(patch, el.dataset.path, hexToRgb(el.value));
-    else if (t === "number") setPath(patch, el.dataset.path, Number(el.value));
+    else if (t === "number" || t === "range") setPath(patch, el.dataset.path, Number(el.value));
     else setPath(patch, el.dataset.path, el.value);
   });
   act(async () => { state.settings = await api("PUT", "/api/settings", patch); renderSettings(); }, "Settings saved");
+});
+
+// Sliders save on release, so the rack screen can be tuned while looking at it; other fields wait for Save.
+$("#settings-form").addEventListener("input", (e) => {
+  if (e.target.dataset.type === "range") e.target.nextElementSibling.textContent = e.target.value;
+});
+$("#settings-form").addEventListener("change", (e) => {
+  if (e.target.dataset.type !== "range") return;
+  const patch = {};
+  setPath(patch, e.target.dataset.path, Number(e.target.value));
+  act(async () => { state.settings = await api("PUT", "/api/settings", patch); }, "Saved");
 });
 
 async function playSound(ref) {

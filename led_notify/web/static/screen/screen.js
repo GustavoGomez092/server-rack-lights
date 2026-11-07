@@ -88,6 +88,7 @@ function render(data) {
   lastData = Date.now();
   document.body.classList.remove("stale");
   document.documentElement.dataset.theme = data.screen.theme;
+  document.documentElement.style.setProperty("--dim", 1 - (data.screen.brightness ?? 100) / 100);
   $("#host").textContent = data.host.name || "Command Center";
   const up = data.stats ? uptime(data.stats.uptime_s) : "";
   $("#meta").textContent = [up, clock(data.now)].filter(Boolean).join(" · ");

@@ -44,4 +44,7 @@ class ScreenSchedule:
             power, theme = ("on" if awake else "off"), "dark"
         else:
             power, theme = "on", ("light" if self._daylight() else "dark")
-        return {"power": power, "theme": theme, "quiet": quiet, "awake_until": until, "last_alert": self._last_alert}
+        # The panel has no DDC/CI, so brightness is a black film the page draws over itself (percent).
+        brightness = self.settings.data["screen"]["brightness_day" if theme == "light" else "brightness_night"]
+        return {"power": power, "theme": theme, "brightness": brightness, "quiet": quiet, "awake_until": until,
+                "last_alert": self._last_alert}
