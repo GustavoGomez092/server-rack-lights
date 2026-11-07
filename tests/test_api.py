@@ -162,7 +162,7 @@ def test_patterns_and_log(client):
 
 def test_ui_is_served(client):
     r = client.get("/")
-    assert r.status_code == 200 and "<title>LED Notify</title>" in r.text
+    assert r.status_code == 200 and "<title>Command Center</title>" in r.text
     assert client.get("/app.js").status_code == 200
     assert client.get("/style.css").status_code == 200
 
