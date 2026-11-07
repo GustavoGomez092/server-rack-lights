@@ -48,7 +48,7 @@ services:
         target: /host/etc/hostname
         read_only: true
     labels:
-      icon: http://192.168.4.61:8787/icon.svg
+      icon: http://192.168.4.61:8787/icon.svg?v=rack
   # Draws the rack status page on the server's DisplayPort (seatd + cage + Chromium kiosk).
   # Separate so a browser crash never touches the LED strip; led-notify works without it.
   display:
@@ -86,7 +86,7 @@ x-casaos:
   author: gustavogomez092
   category: Utilities
   architectures: [amd64]
-  icon: http://192.168.4.61:8787/icon.svg
+  icon: http://192.168.4.61:8787/icon.svg?v=rack
   title:
     en_us: Command Center
   tagline:
