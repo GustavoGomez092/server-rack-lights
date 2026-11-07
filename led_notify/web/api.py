@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -16,7 +17,11 @@ from ..audio.library import MAX_UPLOAD_BYTES, SoundError
 from ..audio.refs import CUSTOM_PREFIX
 from ..events import Event
 from ..patterns import LOOK_KEYS, PatternError, catalog, resolve
+from ..screen.labels import label
 from ..store.settings import SettingsError
+
+
+SCREEN_PUSH_S = 2.0
 
 
 @dataclass
@@ -29,6 +34,9 @@ class Services:
     hub: Any
     clock: Any
     audio: Any = None
+    screen: Any = None   # ScreenSchedule
+    stats: Any = None    # StatsSampler
+    hostname: str = ""
 
 
 class LookIn(BaseModel):
@@ -266,6 +274,48 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
                     yield f"event: {type_}\ndata: {json.dumps(payload, default=str)}\n\n"
             finally:
                 svc.hub.unsubscribe(q)
+
+        return StreamingResponse(events(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+    # ---- rack screen -------------------------------------------------------------------
+    def screen_state() -> dict:
+        if svc.screen is None:
+            raise HTTPException(404, "the rack screen is not enabled")
+        return svc.screen.state()
+
+    def banner(st: dict) -> list[dict]:
+        active = svc.arbiter.snapshot()["active"]
+        items = [{"text": label(a["name"]), "since": a["since"], "priority": a["priority"]} for a in active]
+        last = st["last_alert"]
+        if last and last["name"] not in {a["name"] for a in active}:
+            age = (svc.clock.now() - datetime.fromisoformat(last["time"])).total_seconds()
+            if age < svc.settings.data["screen"]["wake_min"] * 60:
+                rule = svc.settings.rule(last["name"]) or {}
+                items.append({"text": label(last["name"]), "since": last["time"], "priority": rule.get("priority")})
+        return items
+
+    def screen_data() -> dict:
+        st = screen_state()
+        return {"screen": st, "stats": svc.stats.latest if svc.stats else None, "banner": banner(st),
+                "host": {"name": svc.hostname}, "now": svc.clock.now().isoformat(timespec="seconds")}
+
+    @app.get("/api/screen")
+    async def get_screen():
+        return screen_state()
+
+    @app.get("/api/screen/data")
+    async def get_screen_data():
+        return screen_data()
+
+    @app.get("/api/screen/stream")
+    async def screen_stream(request: Request):
+        screen_state()  # 404 before the stream starts
+
+        async def events():
+            while not await request.is_disconnected():
+                yield f"event: screen\ndata: {json.dumps(screen_data(), default=str)}\n\n"
+                await asyncio.sleep(SCREEN_PUSH_S)
 
         return StreamingResponse(events(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

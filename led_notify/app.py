@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import logging
 import os
+import socket
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -26,7 +27,10 @@ from .monitors.dns import DnsMonitor
 from .monitors.docker import DockerMonitor
 from .monitors.internet import InternetMonitor
 from .monitors.supervisor import Supervisor
-from .monitors.thermal import ThermalMonitor
+from .monitors.thermal import ThermalMonitor, read_hwmon_temp
+from .screen.schedule import ScreenSchedule
+from .stats.apps import AppMeter, docker_list
+from .stats.sampler import StatsSampler
 from .store.devices import DeviceStore
 from .store.settings import SettingsStore
 from .web.api import Services, create_app
@@ -44,6 +48,26 @@ def build_monitors(settings, devices, clock) -> list:
     ]
 
 
+# The host's drives as led-notify sees them (/DATA is mounted read-only at /host/DATA).
+SCREEN_DISKS = [("Main", "/host/DATA"), ("Movies SSD", "/host/DATA/Media/MoviesSSD"), ("Backup", "/host/DATA/Backup")]
+
+
+def host_name(path: str = "/host/etc/hostname") -> str:
+    try:
+        with open(path) as f:
+            return f.read().strip() or socket.gethostname()
+    except OSError:
+        return socket.gethostname()
+
+
+def build_stats(settings, clock) -> StatsSampler:
+    apps = AppMeter(os.environ.get("CGROUP_ROOT", "/host/cgroup"),
+                    lambda: docker_list(settings.data["docker"]["socket"]), clock)
+    return StatsSampler(clock, apps, SCREEN_DISKS,
+                        read_cpu_temp=lambda: read_hwmon_temp(settings.data["thermal"]["sensor_names"]),
+                        read_drive_temp=lambda: read_hwmon_temp(["nvme"]))
+
+
 def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio: bool = True):
     data_dir = Path(data_dir)
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -58,10 +82,12 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio:
     # The mixer is set up once for the startup device's card; switching to another card needs a restart.
     mixer_device = settings.data["audio"]["device"]
     audio_svc = AudioService(SoundLibrary(data_dir), player)
-    arbiter = Arbiter(Player(link, clock), settings, clock, hub, chimes=audio_svc)
+    screen = ScreenSchedule(settings, clock)
+    arbiter = Arbiter(Player(link, clock), settings, clock, hub, chimes=audio_svc, on_shown=screen.note_alert)
+    stats = build_stats(settings, clock) if monitors else None
     supervisor = Supervisor(build_monitors(settings, devices, clock) if monitors else [], arbiter.submit, clock, hub)
     svc = Services(arbiter=arbiter, settings=settings, devices=devices, supervisor=supervisor, link=link,
-                   hub=hub, clock=clock, audio=audio_svc)
+                   hub=hub, clock=clock, audio=audio_svc, screen=screen, stats=stats, hostname=host_name())
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -70,6 +96,8 @@ def build(data_dir: Path, address: str, fake_strip: bool, monitors: bool, audio:
         # does not keep a stale connection for the next container.
         engine = [asyncio.create_task(arbiter.run()), asyncio.create_task(supervisor.run()),
                   asyncio.create_task(player.run())]
+        if stats is not None:
+            engine.append(asyncio.create_task(stats.run()))
         if real_audio:  # amixer may hang; never let it delay the lights
             engine.append(asyncio.create_task(init_mixer(mixer_device)))
         link_task = asyncio.create_task(link.run()) if isinstance(link, StripLink) else None

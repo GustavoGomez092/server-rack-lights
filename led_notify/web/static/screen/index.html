@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Center</title>
+<link rel="icon" type="image/svg+xml" href="../icon.svg">
+<link rel="stylesheet" href="screen.css">
+</head>
+<body>
+<main id="screen">
+  <header class="top">
+    <h1 id="host">Command Center</h1>
+    <span id="meta" class="meta"></span>
+  </header>
+
+  <section id="banner" class="banner" hidden></section>
+
+  <section class="gauges" aria-label="Machine">
+    <figure class="gauge" id="g-cpu">
+      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="40"/><circle class="arc" cx="50" cy="50" r="40"/></svg><div class="value"><span class="num">–</span><span class="unit">%</span></div></div>
+      <figcaption>CPU</figcaption>
+    </figure>
+    <figure class="gauge" id="g-ram">
+      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="40"/><circle class="arc" cx="50" cy="50" r="40"/></svg><div class="value"><span class="num">–</span><span class="unit">%</span></div></div>
+      <figcaption>RAM <span class="detail"></span></figcaption>
+    </figure>
+    <figure class="gauge" id="g-temp">
+      <div class="ring"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="40"/><circle class="arc" cx="50" cy="50" r="40"/></svg><div class="value"><span class="num">–</span><span class="unit">°C</span></div></div>
+      <figcaption>CPU temp <span class="detail"></span></figcaption>
+    </figure>
+  </section>
+
+  <section class="panel disks" aria-label="Disks">
+    <h2>Disks</h2>
+    <div id="disks"></div>
+  </section>
+
+  <section class="panel apps" aria-label="Top apps">
+    <h2>Top apps</h2>
+    <ol id="apps"></ol>
+  </section>
+</main>
+<script src="screen.js"></script>
+</body>
+</html>
