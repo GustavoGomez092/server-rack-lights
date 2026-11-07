@@ -1,0 +1,128 @@
+<style>
+  .cards{grid-template-columns:1fr !important;max-width:1100px;margin:0 auto}
+  .card-image{aspect-ratio:auto !important;display:block !important;padding:0}
+  .scr{width:100%;aspect-ratio:16/9;container-type:inline-size;border-radius:6px;overflow:hidden;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif}
+  .scr *{box-sizing:border-box}
+  /* A: gauges */
+  .a{background:#0b0f14;color:#e6edf3;padding:2.5cqw;display:grid;grid-template-columns:1.25fr 1fr;grid-template-rows:auto 1fr auto;gap:2cqw}
+  .a .hd{grid-column:1/3;display:flex;justify-content:space-between;align-items:baseline;font-size:1.8cqw;color:#8b98a5}
+  .a .hd b{color:#e6edf3;font-size:2.4cqw}
+  .a .gauges{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5cqw}
+  .ring{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .ring svg{width:100%}
+  .ring .v{position:absolute;top:34%;font-size:3.6cqw;font-weight:700}
+  .ring .l{font-size:1.5cqw;color:#8b98a5;margin-top:.4cqw}
+  .a .apps,.a .disks{background:#121821;border-radius:1cqw;padding:1.6cqw}
+  .a .apps{grid-row:2/4;grid-column:2}
+  .t{font-size:1.4cqw;letter-spacing:.15em;text-transform:uppercase;color:#8b98a5;margin-bottom:1cqw}
+  .app{display:flex;justify-content:space-between;font-size:1.9cqw;padding:.9cqw 0;border-bottom:1px solid #1e2732}
+  .app span:last-child{color:#8b98a5}
+  .bar{margin:.6cqw 0 1.2cqw}.bar .row{display:flex;justify-content:space-between;font-size:1.6cqw}
+  .track{height:1.1cqw;background:#1e2732;border-radius:1cqw;margin-top:.4cqw;overflow:hidden}
+  .fill{height:100%;border-radius:1cqw}
+  /* B: big numbers + history */
+  .b{background:#f4f1ea;color:#1c1b19;padding:2.5cqw;display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:auto 1fr 1fr;gap:1.6cqw}
+  .b .hd{grid-column:1/5;display:flex;justify-content:space-between;font-size:1.8cqw;color:#6b665c}
+  .b .hd b{color:#1c1b19}
+  .tile{background:#fff;border-radius:1cqw;padding:1.4cqw;display:flex;flex-direction:column;justify-content:space-between}
+  .tile .k{font-size:1.4cqw;letter-spacing:.12em;text-transform:uppercase;color:#6b665c}
+  .tile .n{font-size:5cqw;font-weight:700;line-height:1}
+  .tile .n small{font-size:2cqw;font-weight:500;color:#6b665c}
+  .tile svg{width:100%;height:4cqw}
+  .b .wide{grid-column:span 2}
+  /* C: minimal */
+  .c{background:#000;color:#fff;padding:3.5cqw 4cqw;display:grid;grid-template-columns:1fr 1fr;gap:3cqw;font-weight:300}
+  .c .big{font-size:9cqw;font-weight:200;line-height:.9}
+  .c .lab{font-size:1.6cqw;color:#7a7a7a;letter-spacing:.2em;text-transform:uppercase}
+  .c .ln{display:flex;justify-content:space-between;font-size:2cqw;padding:.7cqw 0;color:#cfcfcf}
+  .c .ok{color:#5be49b}
+</style>
+
+<h2>Which look feels right on top of the rack?</h2>
+<p class="subtitle">All three use your server's real numbers from a minute ago. Shown one per row at full width so you can read them. Click the one you'd want to look at every day. Mixing is fine too ("A's layout with C's colors").</p>
+
+<div class="cards">
+
+<div class="card" data-choice="a" onclick="toggleSelect(this)">
+<div class="card-image">
+<div class="scr a">
+  <div class="hd"><b>GomezPalacios</b><span>up 22 days · 2:41 PM</span></div>
+  <div class="gauges">
+    <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="#1e2732" stroke-width="10"/><circle cx="50" cy="50" r="40" fill="none" stroke="#4cc2ff" stroke-width="10" stroke-dasharray="85 251" transform="rotate(-90 50 50)" stroke-linecap="round"/></svg><div class="v">34%</div><div class="l">CPU</div></div>
+    <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="#1e2732" stroke-width="10"/><circle cx="50" cy="50" r="40" fill="none" stroke="#b18cff" stroke-width="10" stroke-dasharray="171 251" transform="rotate(-90 50 50)" stroke-linecap="round"/></svg><div class="v">68%</div><div class="l">RAM 10.0 / 14.6 GB</div></div>
+    <div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="#1e2732" stroke-width="10"/><circle cx="50" cy="50" r="40" fill="none" stroke="#5be49b" stroke-width="10" stroke-dasharray="136 251" transform="rotate(-90 50 50)" stroke-linecap="round"/></svg><div class="v">54°</div><div class="l">CPU temp</div></div>
+  </div>
+  <div class="apps">
+    <div class="t">Top apps</div>
+    <div class="app"><span>Paperclip</span><span>34% · 1.9 GB</span></div>
+    <div class="app"><span>FlareSolverr</span><span>1% · 1.5 GB</span></div>
+    <div class="app"><span>Brand browser</span><span>0% · 0.8 GB</span></div>
+    <div class="app"><span>Hermes</span><span>0% · 0.7 GB</span></div>
+    <div class="app"><span>AdGuard</span><span>0% · 0.2 GB</span></div>
+  </div>
+  <div class="disks">
+    <div class="t">Disks</div>
+    <div class="bar"><div class="row"><span>Main</span><span>454 / 904 GB</span></div><div class="track"><div class="fill" style="width:51%;background:#4cc2ff"></div></div></div>
+    <div class="bar"><div class="row"><span>Movies SSD</span><span>687 / 916 GB</span></div><div class="track"><div class="fill" style="width:75%;background:#ffb347"></div></div></div>
+    <div class="bar"><div class="row"><span>Backup</span><span>62 / 234 GB</span></div><div class="track"><div class="fill" style="width:27%;background:#5be49b"></div></div></div>
+  </div>
+</div>
+</div>
+<div class="card-body"><h3>A · Control room</h3><p>Dark, three ring gauges, disk bars, apps list. Classic server-dashboard feel.</p></div>
+</div>
+
+<div class="card" data-choice="b" onclick="toggleSelect(this)">
+<div class="card-image">
+<div class="scr b">
+  <div class="hd"><b>GomezPalacios</b><span>up 22 days · 2:41 PM</span></div>
+  <div class="tile"><div class="k">CPU</div><div class="n">34<small>%</small></div><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline fill="none" stroke="#2f6fde" stroke-width="2" points="0,16 10,14 20,15 30,9 40,11 50,6 60,10 70,8 80,12 90,9 100,10"/></svg></div>
+  <div class="tile"><div class="k">RAM</div><div class="n">10.0<small> / 14.6 GB</small></div><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline fill="none" stroke="#7a4fd6" stroke-width="2" points="0,8 20,8 40,7 60,7 80,6 100,7"/></svg></div>
+  <div class="tile"><div class="k">CPU temp</div><div class="n">54<small>°C</small></div><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline fill="none" stroke="#1f9d61" stroke-width="2" points="0,12 15,11 30,9 45,10 60,8 75,10 90,9 100,9"/></svg></div>
+  <div class="tile"><div class="k">Drive temp</div><div class="n">48<small>°C</small></div><svg viewBox="0 0 100 20" preserveAspectRatio="none"><polyline fill="none" stroke="#1f9d61" stroke-width="2" points="0,12 25,12 50,11 75,11 100,12"/></svg></div>
+  <div class="tile wide"><div class="k">Disks</div>
+    <div class="bar"><div class="row"><span>Main</span><span>451 GB free</span></div><div class="track" style="background:#ece7dc"><div class="fill" style="width:51%;background:#2f6fde"></div></div></div>
+    <div class="bar"><div class="row"><span>Movies SSD</span><span>230 GB free</span></div><div class="track" style="background:#ece7dc"><div class="fill" style="width:75%;background:#d9822b"></div></div></div>
+    <div class="bar"><div class="row"><span>Backup</span><span>172 GB free</span></div><div class="track" style="background:#ece7dc"><div class="fill" style="width:27%;background:#1f9d61"></div></div></div>
+  </div>
+  <div class="tile wide"><div class="k">Top apps</div>
+    <div class="app" style="border-color:#ece7dc"><span>Paperclip</span><span>34% · 1.9 GB</span></div>
+    <div class="app" style="border-color:#ece7dc"><span>FlareSolverr</span><span>1% · 1.5 GB</span></div>
+    <div class="app" style="border-color:#ece7dc"><span>Brand browser</span><span>0% · 0.8 GB</span></div>
+    <div class="app" style="border-color:#ece7dc"><span>Hermes</span><span>0% · 0.7 GB</span></div>
+    <div class="app" style="border:0"><span>AdGuard</span><span>0% · 0.2 GB</span></div>
+  </div>
+</div>
+</div>
+<div class="card-body"><h3>B · Instrument panel</h3><p>Light, big numbers with a small "last hour" line under each, so you see trends, not just right now.</p></div>
+</div>
+
+<div class="card" data-choice="c" onclick="toggleSelect(this)">
+<div class="card-image">
+<div class="scr c">
+  <div>
+    <div class="lab">GomezPalacios · <span class="ok">all good</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:2cqw;margin-top:2cqw">
+      <div><div class="big">34<span style="font-size:3cqw">%</span></div><div class="lab">CPU</div></div>
+      <div><div class="big">68<span style="font-size:3cqw">%</span></div><div class="lab">RAM</div></div>
+      <div><div class="big">54<span style="font-size:3cqw">°</span></div><div class="lab">Temp</div></div>
+      <div><div class="big">22<span style="font-size:3cqw">d</span></div><div class="lab">Uptime</div></div>
+    </div>
+  </div>
+  <div>
+    <div class="lab">Disks</div>
+    <div class="ln"><span>Main</span><span>51%</span></div>
+    <div class="ln"><span>Movies SSD</span><span>75%</span></div>
+    <div class="ln"><span>Backup</span><span>27%</span></div>
+    <div class="lab" style="margin-top:2.5cqw">Top apps</div>
+    <div class="ln"><span>Paperclip</span><span>34%</span></div>
+    <div class="ln"><span>FlareSolverr</span><span>1%</span></div>
+    <div class="ln"><span>Brand browser</span><span>0%</span></div>
+    <div class="ln"><span>Hermes</span><span>0%</span></div>
+    <div class="ln"><span>AdGuard</span><span>0%</span></div>
+  </div>
+</div>
+</div>
+<div class="card-body"><h3>C · Calm</h3><p>Black, huge thin numbers, almost no decoration. Reads like a clock; color only appears when something's wrong.</p></div>
+</div>
+
+</div>
