@@ -269,15 +269,27 @@ $("#save-settings").addEventListener("click", () => {
   act(async () => { state.settings = await api("PUT", "/api/settings", patch); renderSettings(); }, "Settings saved");
 });
 
-// Sliders save on release, so the rack screen can be tuned while looking at it; other fields wait for Save.
+// Sliders save while they move (at most every 300 ms, and on release), so the rack screen can be tuned while
+// looking at it: the server previews that slider's look for 10 s. Other fields wait for Save.
+const SLIDER_DEBOUNCE_MS = 300;
+const sliderTimers = new Map();
+function saveSlider(el) {
+  clearTimeout(sliderTimers.get(el));
+  sliderTimers.delete(el);
+  if (el.dataset.sent === el.value) return;
+  el.dataset.sent = el.value;
+  const patch = {};
+  setPath(patch, el.dataset.path, Number(el.value));
+  api("PUT", "/api/settings", patch).then((s) => { state.settings = s; }).catch((err) => toast(err.message, true));
+}
 $("#settings-form").addEventListener("input", (e) => {
-  if (e.target.dataset.type === "range") e.target.nextElementSibling.textContent = e.target.value;
+  const el = e.target;
+  if (el.dataset.type !== "range") return;
+  el.nextElementSibling.textContent = el.value;
+  if (!sliderTimers.has(el)) sliderTimers.set(el, setTimeout(() => saveSlider(el), SLIDER_DEBOUNCE_MS));
 });
 $("#settings-form").addEventListener("change", (e) => {
-  if (e.target.dataset.type !== "range") return;
-  const patch = {};
-  setPath(patch, e.target.dataset.path, Number(e.target.value));
-  act(async () => { state.settings = await api("PUT", "/api/settings", patch); }, "Saved");
+  if (e.target.dataset.type === "range") saveSlider(e.target);
 });
 
 async function playSound(ref) {

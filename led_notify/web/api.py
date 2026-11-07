@@ -176,10 +176,16 @@ def create_app(svc: Services, lifespan=None) -> FastAPI:
     async def put_settings(body: dict = Body(...)):
         if "rules" in body:
             raise HTTPException(422, "edit rules with PUT /api/rules")
+        before = dict(svc.settings.data["screen"])
         try:
             svc.settings.update(body)
         except SettingsError as e:
             raise HTTPException(422, str(e))
+        # A moved brightness slider shows its look on the rack screen for a few seconds.
+        after = svc.settings.data["screen"]
+        for key, theme in (("brightness_day", "light"), ("brightness_night", "dark")):
+            if svc.screen is not None and after[key] != before[key]:
+                svc.screen.preview(theme)
         return await get_settings()
 
     @app.get("/api/devices")

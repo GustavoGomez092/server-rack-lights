@@ -92,3 +92,26 @@ async def test_banner_priority_for_webhook_alert_without_rule(client, svc):
     await settle(svc.arbiter)
     banner = client.get("/api/screen/data").json()["banner"]
     assert banner == [{"text": "Backup failed", "since": banner[0]["since"], "priority": "high"}]
+
+
+def test_brightness_slider_previews_its_look(client, svc):
+    svc.clock.set_time("12:00")
+    client.put("/api/settings", json={"screen": {"brightness_night": 40}})
+    body = client.get("/api/screen").json()
+    assert (body["theme"], body["brightness"]) == ("dark", 40)
+    svc.clock.advance(11)
+    assert client.get("/api/screen").json()["theme"] == "light"
+
+
+def test_unchanged_or_other_settings_do_not_preview(client, svc):
+    svc.clock.set_time("12:00")
+    settings = client.get("/api/settings").json()
+    client.put("/api/settings", json={"screen": settings["screen"]})  # the Save button resends every field
+    client.put("/api/settings", json={"screen": {"wake_min": 7}})
+    assert client.get("/api/screen").json()["theme"] == "light"
+
+
+def test_brightness_change_without_screen_still_saves(svc):
+    svc.screen = None
+    r = TestClient(create_app(svc)).put("/api/settings", json={"screen": {"brightness_day": 50}})
+    assert r.status_code == 200 and r.json()["screen"]["brightness_day"] == 50

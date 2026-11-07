@@ -134,3 +134,27 @@ def test_brightness_change_applies_without_restart(settings, clock):
     assert s.state()["brightness"] == 100
     settings.update({"screen": {"brightness_day": 70}})
     assert s.state()["brightness"] == 70
+
+
+def test_preview_shows_a_look_for_10s(settings, clock):
+    settings.update({"screen": {"brightness_day": 60, "brightness_night": 35}})
+    s = _sched(settings, clock, "12:00")
+    s.preview("dark")
+    st = s.state()
+    assert (st["power"], st["theme"], st["brightness"]) == ("on", "dark", 35)
+    clock.advance(9.9)
+    assert s.state()["theme"] == "dark"
+    s.preview("dark")          # every slider move restarts the 10 s
+    clock.advance(9.9)
+    assert s.state()["theme"] == "dark"
+    clock.advance(0.2)
+    assert (s.state()["theme"], s.state()["brightness"]) == ("light", 60)
+
+
+def test_preview_turns_the_screen_on_in_quiet_hours(settings, clock):
+    s = _sched(settings, clock, "02:00")
+    s.preview("light")
+    st = s.state()
+    assert (st["power"], st["theme"], st["quiet"]) == ("on", "light", True)
+    clock.advance(10.1)
+    assert s.state()["power"] == "off"

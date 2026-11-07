@@ -45,7 +45,8 @@ sunset (location under "Rack screen"), dark otherwise; off during quiet hours, e
 strip shows at night (rule quiet behavior `dim`, i.e. high/critical) wakes it for "Wake at night for (min)"
 (default 5). Test it without noise: `curl -X POST …/api/events -d '{"name":"screen.test","priority":"high","pattern":"white_flash","duration":1,"sound":""}'`.
 Brightness: two sliders under "Rack screen" (light look / dark look, 10–100 %, saved on release, on the
-monitor within ~2 s). The panel (EDID `HCT` "HDMI") does not answer DDC/CI, so the backlight stays at full and
+monitor within ~2 s). Moving a slider saves as it moves (at most every 300 ms) and shows that slider's look
+(light/dark, on even in quiet hours) for 10 s after the last move, so either look can be tuned at any hour. The panel (EDID `HCT` "HDMI") does not answer DDC/CI, so the backlight stays at full and
 the page mixes all its colors toward black instead (`--keep` in `screen.css`); a full-screen black overlay
 looked the same but cost the kiosk ~12 % CPU under software rendering.
 Stopping `led-notify-display` never affects the strip; the console text returns to the monitor while it is stopped.
