@@ -53,6 +53,7 @@ DEFAULT_SETTINGS = {
     "adguard": {"url": "http://127.0.0.1:3001", "username": "", "password": "", "min_blocked": 50,
                 "factor": 3.0, "interval_s": 60},
     "audio": {"enabled": True, "volume_pct": 70, "night_volume_pct": 30, "device": "plughw:1,0"},
+    "screen": {"wake_min": 5, "latitude": 34.05, "longitude": -118.24},
     "rules": DEFAULT_RULES,
 }
 
@@ -63,6 +64,7 @@ RANGES = {
     "disk.full_pct": (1, 100), "disk.clear_pct": (1, 100),
     "adguard.min_blocked": (1, 100000), "adguard.factor": (1, 100),
     "audio.volume_pct": (0, 100), "audio.night_volume_pct": (0, 100),
+    "screen.wake_min": (1, 60), "screen.latitude": (-90, 90), "screen.longitude": (-180, 180),
 }
 POSITIVE_SUFFIXES = ("_s", "_min", "_rounds", "_ms")
 TIME_KEYS = ("start", "end", "late_start", "late_end")
