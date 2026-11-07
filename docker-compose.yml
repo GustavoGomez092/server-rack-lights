@@ -36,12 +36,49 @@ services:
       - type: bind
         source: /DATA/AppData/led-notify/data
         target: /data
+      # Rack screen stats: per-app CPU/memory from the host's cgroups, and the host's name.
+      - type: bind
+        source: /sys/fs/cgroup
+        target: /host/cgroup
+        read_only: true
+      - type: bind
+        source: /etc/hostname
+        target: /host/etc/hostname
+        read_only: true
     labels:
       icon: http://192.168.4.61:8787/icon.svg
+  # Draws the rack status page on the server's DisplayPort (seatd + cage + Chromium kiosk).
+  # Separate so a browser crash never touches the LED strip; led-notify works without it.
+  display:
+    container_name: led-notify-display
+    image: led-notify-display:local
+    pull_policy: never
+    network_mode: host
+    restart: unless-stopped
+    stop_grace_period: 10s
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
+    cap_add: [SYS_TTY_CONFIG]
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/tty0:/dev/tty0
+      - /dev/tty1:/dev/tty1
+    environment:
+      TZ: America/Los_Angeles
+    volumes:
+      - type: bind
+        source: /run/udev
+        target: /run/udev
+        read_only: true
 x-casaos:
   main: led-notify
   index: /
-  hostname: lights.home.lab
+  hostname: command.home.lab
   port_map: "80"
   scheme: http
   author: gustavogomez092
@@ -49,8 +86,8 @@ x-casaos:
   architectures: [amd64]
   icon: http://192.168.4.61:8787/icon.svg
   title:
-    en_us: LED Notify
+    en_us: Command Center
   tagline:
-    en_us: Homelab alerts on the Bluetooth LED strip
+    en_us: LED strip alerts + rack status screen
   description:
-    en_us: Shows internet, DNS, device, disk, CPU and container events on the BanlanX SP548E strip. Webhook at /api/events.
+    en_us: Shows internet, DNS, device, disk, CPU and container events on the BanlanX SP548E strip, and server status on the rack monitor (DisplayPort). Webhook at /api/events; status page at /screen/.

@@ -190,6 +190,8 @@ const FIELDS = [
     ["idle.breath_color", "select", "Breath color", ["red", "green", "blue", "yellow", "cyan", "purple", "white"]],
     ["idle.breath_speed", "number", "Breath speed (1-10)"], ["idle.brightness", "number", "Idle brightness (0-255)"],
     ["max_brightness", "number", "Max brightness (0-255)"], ["manual_timeout_min", "number", "Manual timeout (min)"]]],
+  ["Rack screen", [["screen.wake_min", "number", "Wake at night for (min)"],
+    ["screen.latitude", "number", "Latitude (for sunrise/sunset)"], ["screen.longitude", "number", "Longitude"]]],
   ["Audio", [["audio.enabled", "checkbox", "Chimes enabled"], ["audio.volume_pct", "number", "Volume % (day)"],
     ["audio.night_volume_pct", "number", "Night volume % (critical only)"]]],
   ["Internet", [["internet.slow_rtt_ms", "number", "Slow if median ping above (ms)"], ["internet.slow_loss_pct", "number", "Slow if packet loss above (%)"]]],
@@ -248,7 +250,8 @@ function renderSettings() {
     if (type === "color") return `<label>${esc(label)} <input type="color" data-path="${path}" data-type="color" value="${rgbToHex(v)}"></label>`;
     if (type === "select") return `<label>${esc(label)} <select data-path="${path}" data-type="select">${opts(choices, v)}</select></label>`;
     if (type === "secret") return `<label>${esc(label)} <input type="password" data-path="${path}" data-type="secret" autocomplete="new-password" placeholder="${v && v.set ? "set — leave blank to keep" : "not set"}"></label>`;
-    return `<label>${esc(label)} <input type="${type}" data-path="${path}" data-type="${type}" value="${esc(v)}"></label>`;
+    const step = type === "number" ? ' step="any"' : "";
+    return `<label>${esc(label)} <input type="${type}"${step} data-path="${path}" data-type="${type}" value="${esc(v)}"></label>`;
   }).join("")}</fieldset>`).join("");
 }
 $("#save-settings").addEventListener("click", () => {
