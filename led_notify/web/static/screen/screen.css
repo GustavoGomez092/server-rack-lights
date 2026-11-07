@@ -1,23 +1,36 @@
 /* Rack status screen: layout A "Control room". Sized in vw/vh so any 16:9 panel reads the same. */
 :root {
-  --bg: #0b0f14; --panel: #121821; --line: #1e2732; --text: #e6edf3; --muted: #8b98a5;
-  --cpu: #4cc2ff; --ram: #b18cff; --temp: #5be49b; --ok: #5be49b; --warn: #ffb347; --bad: #ff5d5d;
-  --banner-bad-bg: #3a1216; --banner-warn-bg: #3a2a10;
+  --c-bg: #0b0f14; --c-panel: #121821; --c-line: #1e2732; --c-text: #e6edf3; --c-muted: #8b98a5;
+  --c-cpu: #4cc2ff; --c-ram: #b18cff; --c-temp: #5be49b; --c-ok: #5be49b; --c-warn: #ffb347; --c-bad: #ff5d5d;
+  --c-banner-bad-bg: #3a1216; --c-banner-warn-bg: #3a2a10;
 }
 :root[data-theme="light"] {
-  --bg: #eef1f4; --panel: #ffffff; --line: #e1e6ec; --text: #14202b; --muted: #5d6b78;
-  --cpu: #1f7fd1; --ram: #7a4fd6; --temp: #138a55; --ok: #138a55; --warn: #c27100; --bad: #d12f2f;
-  --banner-bad-bg: #fde4e4; --banner-warn-bg: #fff1d6;
+  --c-bg: #eef1f4; --c-panel: #ffffff; --c-line: #e1e6ec; --c-text: #14202b; --c-muted: #5d6b78;
+  --c-cpu: #1f7fd1; --c-ram: #7a4fd6; --c-temp: #138a55; --c-ok: #138a55; --c-warn: #c27100; --c-bad: #d12f2f;
+  --c-banner-bad-bg: #fde4e4; --c-banner-warn-bg: #fff1d6;
+}
+/* Brightness: the panel ignores DDC/CI, so every color is mixed toward black instead (--keep is set by
+   screen.js). Same look as a black film over the page, without a full-screen layer to composite. */
+:root { --keep: 100%;
+  --bg: color-mix(in srgb, var(--c-bg) var(--keep), #000);
+  --panel: color-mix(in srgb, var(--c-panel) var(--keep), #000);
+  --line: color-mix(in srgb, var(--c-line) var(--keep), #000);
+  --text: color-mix(in srgb, var(--c-text) var(--keep), #000);
+  --muted: color-mix(in srgb, var(--c-muted) var(--keep), #000);
+  --cpu: color-mix(in srgb, var(--c-cpu) var(--keep), #000);
+  --ram: color-mix(in srgb, var(--c-ram) var(--keep), #000);
+  --temp: color-mix(in srgb, var(--c-temp) var(--keep), #000);
+  --ok: color-mix(in srgb, var(--c-ok) var(--keep), #000);
+  --warn: color-mix(in srgb, var(--c-warn) var(--keep), #000);
+  --bad: color-mix(in srgb, var(--c-bad) var(--keep), #000);
+  --banner-bad-bg: color-mix(in srgb, var(--c-banner-bad-bg) var(--keep), #000);
+  --banner-warn-bg: color-mix(in srgb, var(--c-banner-warn-bg) var(--keep), #000);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); cursor: none; }
 body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "DejaVu Sans", sans-serif;
        font-variant-numeric: tabular-nums; }
 body.ready { transition: background-color .3s, color .3s; } /* no fade on first paint: the theme is known by then */
-/* Brightness: the panel ignores DDC/CI, so a black film over the page stands in for the backlight. */
-body::after { content: ""; position: fixed; inset: 0; background: #000; opacity: var(--dim, 0);
-              pointer-events: none; z-index: 10; }
-body.ready::after { transition: opacity .3s; }
 
 #screen { width: 100vw; height: 100vh; padding: 2.4vw 2.6vw; display: grid; gap: 1.6vw;
           grid-template-columns: 1.3fr 1fr; grid-template-rows: auto auto 1fr auto;

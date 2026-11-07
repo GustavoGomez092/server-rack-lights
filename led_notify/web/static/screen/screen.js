@@ -88,13 +88,17 @@ function render(data) {
   lastData = Date.now();
   document.body.classList.remove("stale");
   document.documentElement.dataset.theme = data.screen.theme;
-  document.documentElement.style.setProperty("--dim", 1 - (data.screen.brightness ?? 100) / 100);
+  document.documentElement.style.setProperty("--keep", `${data.screen.brightness ?? 100}%`);
   $("#host").textContent = data.host.name || "Command Center";
   const up = data.stats ? uptime(data.stats.uptime_s) : "";
   $("#meta").textContent = [up, clock(data.now)].filter(Boolean).join(" · ");
   renderBanner(data.banner || []);
   renderStats(data.stats);
-  requestAnimationFrame(() => document.body.classList.add("ready"));
+  // Flush styles first so the first theme and brightness apply at once; only later changes fade.
+  if (!document.body.classList.contains("ready")) {
+    void document.body.offsetWidth;
+    document.body.classList.add("ready");
+  }
 }
 
 // EventSource reconnects by itself after a led-notify restart; meanwhile the last numbers stay up, dimmed.
