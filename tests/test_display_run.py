@@ -80,11 +80,23 @@ def fake(tmp_path):
     return tmp_path
 
 
-def test_night_start_turns_screen_off_within_a_second_or_two(fake, run):
+def test_night_never_cuts_the_signal(fake, run):
+    # The rack monitor falls asleep without a signal and only a power cycle wakes it, so "off" is a black
+    # page (drawn by the status page itself); the output must stay enabled.
     (fake / "api").write_text('{"power":"off","theme":"dark"}')
     (fake / "page-ok").touch()
     run()
-    assert wait_until(lambda: "--off DP-1" in log(fake), 3.5), log(fake)
+    assert wait_until(lambda: "cage" in log(fake), 3), log(fake)
+    time.sleep(6.5)
+    assert not any("--off" in line for line in log(fake)), log(fake)
+
+
+def test_a_disabled_output_is_turned_back_on(fake, run):
+    (fake / "page-ok").touch()
+    run()
+    assert wait_until(lambda: "cage" in log(fake), 3), log(fake)
+    (fake / "enabled").write_text("no\n")
+    assert wait_until(lambda: "--on DP-1" in log(fake), 7), log(fake)
 
 
 def test_kiosk_waits_for_led_notify_page(fake, run):

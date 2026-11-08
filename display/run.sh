@@ -1,11 +1,10 @@
 #!/bin/bash
-# Keeps a Chromium kiosk on the rack monitor and powers the monitor on/off as led-notify's /api/screen says.
-# cage 0.2.0 has no output-power protocol, so "off" disables the output with wlr-randr (no signal → standby).
+# Keeps a Chromium kiosk on the rack monitor and its output enabled.
+# The output is never turned off: the rack monitor (HCT board) falls asleep without a signal and only a power
+# cycle wakes it again. Night "off" is a black page that the status page draws itself (/api/screen power).
 set -u
 URL=${SCREEN_URL:-http://127.0.0.1:8787/screen/}
-API=${SCREEN_API:-http://127.0.0.1:8787/api/screen}
 POLL_S=${POLL_S:-5}
-FALLBACK_S=60   # led-notify unreachable this long: follow the default quiet hours (23:00-07:00)
 DRM_STATUS=${DRM_STATUS:-/sys/class/drm/card*-*/status}
 
 log() { echo "$(date '+%F %T') $*"; }
@@ -16,7 +15,7 @@ nap() { sleep "$1" & wait $!; }  # interruptible, so SIGTERM is handled at once
 monitor() { grep -qx connected $DRM_STATUS 2>/dev/null; }
 outputs() { randr 2>/dev/null | awk '/^[^ ]/{n=$1} /Enabled:/{print n ":" $2}'; }
 
-CAGE=0; SEATD=0; want=""; applied=""; ever_ok=""; last_ok=0; note=""
+CAGE=0; SEATD=0; note=""
 
 # Bash as PID 1 ignores SIGTERM unless trapped; stop cage and seatd so the VT is handed back cleanly.
 stop() {
@@ -29,33 +28,16 @@ trap stop TERM INT
 # Log a waiting reason once, not every poll.
 say_once() { [ "$note" = "$1" ] || log "$1"; note=$1; }
 
-# Sets $want from led-notify; before it has ever answered, or after a long outage, use 23:00-07:00.
-desired() {
-  local body hour
-  if body=$(curl -fsS -m 3 "$API" 2>/dev/null); then
-    ever_ok=1; last_ok=$(date +%s)
-    case "$body" in *'"power":"off"'*) want=off ;; *) want=on ;; esac
-  elif [ -z "$ever_ok" ] || (( $(date +%s) - last_ok > FALLBACK_S )); then
-    hour=$((10#$(date +%H)))
-    if (( hour >= 23 || hour < 7 )); then want=off; else want=on; fi
-  fi
-}
-
-# Applies $want to every output; returns 1 while cage has no outputs yet. A monitor plugged in later
-# shows up in `outputs` and gets the current state.
+# Enables any disabled output (e.g. left off by an older version); returns 1 while cage has no outputs yet.
 apply() {
-  local outs o name enabled
+  local outs o
   outs=$(outputs)
   [ -n "$outs" ] || return 1
-  [ "$want|$outs" = "$applied" ] && return 0
   for o in $outs; do
-    name=${o%%:*}; enabled=${o##*:}
-    if [ "$want" = on ] && [ "$enabled" != yes ]; then randr --output "$name" --on
-    elif [ "$want" = off ] && [ "$enabled" = yes ]; then randr --output "$name" --off
-    fi
+    [ "${o##*:}" = yes ] && continue
+    randr --output "${o%%:*}" --on
+    log "output ${o%%:*} on"
   done
-  applied="$want|$(outputs)"
-  log "screen $want ($outs)"
 }
 
 start_cage() {
@@ -66,9 +48,7 @@ start_cage() {
     --disable-dev-shm-usage --disable-features=Translate,MediaRouter --password-store=basic \
     --renderer-process-limit=1 --user-data-dir=/tmp/chromium "$URL" >/tmp/cage.log 2>&1 &
   CAGE=$!
-  applied=""
   log "kiosk started (pid $CAGE)"
-  # Apply the wanted power as soon as an output exists: a start at night must not stay lit.
   for _ in $(seq 1 30); do
     apply && break
     kill -0 "$CAGE" 2>/dev/null || break
@@ -99,11 +79,9 @@ while true; do
       nap "$POLL_S"; continue
     fi
     note=""
-    desired
     start_cage
     continue
   fi
   nap "$POLL_S"
-  desired
-  [ -n "$want" ] && apply
+  apply
 done

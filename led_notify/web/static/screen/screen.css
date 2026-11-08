@@ -85,6 +85,10 @@ body.ready { transition: background-color .3s, color .3s; } /* no fade on first 
 .apps .mem { color: var(--muted); min-width: 7vw; text-align: right; }
 .apps .empty { color: var(--muted); font-size: 1.7vw; border: 0; display: block; }
 
+/* Screen "off" (quiet hours): the output stays on, so draw pure black. */
+:root.blank, :root.blank body { background: #000; }
+:root.blank #screen { visibility: hidden; }
+
 /* No data for a while (led-notify restarting): keep the last numbers, but show they are old. */
 body.stale .gauges, body.stale .panel { opacity: .45; }
 body.stale .meta::after { content: " · reconnecting"; color: var(--warn); }

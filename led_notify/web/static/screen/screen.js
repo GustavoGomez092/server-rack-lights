@@ -87,6 +87,11 @@ function renderBanner(items) {
 function render(data) {
   lastData = Date.now();
   document.body.classList.remove("stale");
+  // Night "off" is pure black: the display keeps its output on, because this monitor does not wake from
+  // a lost signal. Nothing else is drawn until the schedule turns the screen on again.
+  const off = data.screen.power === "off";
+  document.documentElement.classList.toggle("blank", off);
+  if (off) return;
   document.documentElement.dataset.theme = data.screen.theme;
   document.documentElement.style.setProperty("--keep", `${data.screen.brightness ?? 100}%`);
   $("#host").textContent = data.host.name || "Command Center";
