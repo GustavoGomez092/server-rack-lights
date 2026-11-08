@@ -35,13 +35,15 @@ Two containers, one app (`docker-compose.yml`):
   mounted read-only at `/host/cgroup`) every 2 s and serves `/screen/`, `/api/screen` (power + theme),
   `/api/screen/data` and `/api/screen/stream` (SSE).
 - `led-notify-display` (`display/`) runs `seatd` + `cage` + Chromium in kiosk mode on `/dev/dri`
-  (needs `SYS_TTY_CONFIG`, `/dev/tty0`, `/dev/tty1`, `/run/udev`), polls `/api/screen` every 5 s and turns the
-  monitor's output on/off with `wlr-randr`. It only starts the browser while a DRM connector reports
-  `connected` (with no monitor, cage + Chromium spin a CPU core). `docker logs led-notify-display` says
-  `waiting for a monitor…`, `kiosk started`, `screen on|off (…)`.
+  (needs `SYS_TTY_CONFIG`, `/dev/tty0`, `/dev/tty1`, `/run/udev`) and keeps every output enabled with
+  `wlr-randr`. It never turns the output off: the rack monitor falls asleep when its signal goes away and only a
+  power cycle (unplug its USB power) wakes it again, so "off" is a pure black page drawn by `/screen/` (the
+  backlight stays lit). It only starts the browser while a DRM connector reports `connected` (with no monitor,
+  cage + Chromium spin a CPU core). `docker logs led-notify-display` says `waiting for a monitor…`,
+  `kiosk started`, `output … on`.
 
 Schedule (from the Rules → Settings page): on outside quiet hours — light theme between local sunrise and
-sunset (location under "Rack screen"), dark otherwise; off during quiet hours, except that any alert the
+sunset (location under "Rack screen"), dark otherwise; black during quiet hours, except that any alert the
 strip shows at night (rule quiet behavior `dim`, i.e. high/critical) wakes it for "Wake at night for (min)"
 (default 5). Test it without noise: `curl -X POST …/api/events -d '{"name":"screen.test","priority":"high","pattern":"white_flash","duration":1,"sound":""}'`.
 Brightness: two sliders under "Rack screen" (light look / dark look, 10–100 %, saved on release, on the
