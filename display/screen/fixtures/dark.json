@@ -1,0 +1,81 @@
+{
+  "screen": {
+    "power": "on",
+    "theme": "dark",
+    "brightness": 100,
+    "quiet": false,
+    "awake_until": null,
+    "last_alert": {
+      "name": "adguard.block_spike",
+      "time": "2026-11-09T17:00:15-08:00",
+      "priority": "low"
+    }
+  },
+  "stats": {
+    "cpu_pct": 8.2,
+    "memory": {
+      "total_bytes": 15645749248,
+      "used_bytes": 8992215040
+    },
+    "temps": {
+      "cpu_c": 54.5,
+      "drive_c": 47.9
+    },
+    "disks": [
+      {
+        "label": "Main",
+        "mounted": true,
+        "used_bytes": 492893536256,
+        "total_bytes": 970478710784,
+        "pct": 50.8
+      },
+      {
+        "label": "Movies SSD",
+        "mounted": true,
+        "used_bytes": 740257619968,
+        "total_bytes": 983350071296,
+        "pct": 75.3
+      },
+      {
+        "label": "Backup",
+        "mounted": true,
+        "used_bytes": 79011581952,
+        "total_bytes": 250903887872,
+        "pct": 31.5
+      }
+    ],
+    "apps": [
+      {
+        "name": "Paperclip",
+        "cpu_pct": 2.3,
+        "mem_bytes": 2318716928
+      },
+      {
+        "name": "Brand browser",
+        "cpu_pct": 1.8,
+        "mem_bytes": 1146064896
+      },
+      {
+        "name": "Robin Hub",
+        "cpu_pct": 0.9,
+        "mem_bytes": 80531456
+      },
+      {
+        "name": "Rack screen",
+        "cpu_pct": 0.8,
+        "mem_bytes": 239886336
+      },
+      {
+        "name": "Hermes",
+        "cpu_pct": 0.3,
+        "mem_bytes": 723611648
+      }
+    ],
+    "uptime_s": 2137150.17
+  },
+  "banner": [],
+  "host": {
+    "name": "GomezPalacios"
+  },
+  "now": "2026-11-09T17:12:30-08:00"
+}
