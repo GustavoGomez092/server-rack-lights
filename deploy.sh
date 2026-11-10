@@ -20,11 +20,13 @@ for f in settings.json devices.json; do
     sudo find $APP/data -maxdepth 1 -name \"\$f.pre-deploy-*\" | sort -r | tail -n +6 | while read -r old; do sudo rm -f \"\$old\"; done
   fi
 done"
-rsync -az --delete --exclude .venv --exclude .git --exclude __pycache__ --exclude .pytest_cache \
+rsync -az --delete --exclude .venv --exclude .git --exclude __pycache__ --exclude .pytest_cache --exclude /display/screen/target --exclude /display/spike \
   --exclude /data -e "ssh ${SSH_OPTS[*]}" ./ "$HOST:$APP/src/"
 
 # Build both images (led-notify, rack screen), register (first time only), recreate from the synced compose, then health-check.
 ssh "${SSH_OPTS[@]}" "$HOST" "set -e
+# The rack screen's previous image stays as :prev, so a bad screen build rolls back with one retag.
+sudo docker image inspect led-notify-display:local >/dev/null 2>&1 && sudo docker tag led-notify-display:local led-notify-display:prev
 cd $APP/src && sudo docker build -t led-notify:local . && sudo docker build -t led-notify-display:local display
 if sudo test -d $REGISTERED; then
   sudo cp $APP/src/docker-compose.yml $REGISTERED/docker-compose.yml
