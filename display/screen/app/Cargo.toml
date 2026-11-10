@@ -1,0 +1,12 @@
+[package]
+name = "rack-screen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rack-screen-core = { path = "../core" }
+gpui = "0.2.2"
+lyon = "1.0"
+async-channel = "2"
+serde_json = "1"
+ureq = { version = "2", default-features = false }
