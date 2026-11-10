@@ -40,8 +40,8 @@ fn panel(title: &str, p: &Palette, u: Vu) -> Div {
         )
 }
 
-pub fn disks(items: &[DiskVm], fills: &[f32], p: &Palette, u: Vu) -> Div {
-    panel("DISKS", p, u).child(div().flex().flex_col().gap(u.w(1.3)).children(items.iter().enumerate().map(|(i, d)| {
+pub fn disks(items: &[DiskVm], p: &Palette, u: Vu) -> Div {
+    panel("DISKS", p, u).child(div().flex().flex_col().gap(u.w(1.3)).children(items.iter().map(|d| {
         let fill = match d.level {
             Level::Ok => p.ok,
             Level::Warn => p.warn,
@@ -51,7 +51,6 @@ pub fn disks(items: &[DiskVm], fills: &[f32], p: &Palette, u: Vu) -> Div {
         if !d.mounted {
             used = used.italic();
         }
-        let pct = fills.get(i).copied().unwrap_or(d.fill_pct);
         div()
             .child(div().flex().justify_between().text_size(u.w(1.7)).child(d.label.clone()).child(used))
             .child(
@@ -61,7 +60,7 @@ pub fn disks(items: &[DiskVm], fills: &[f32], p: &Palette, u: Vu) -> Div {
                     .rounded(u.w(1.0))
                     .bg(color(p.line))
                     .overflow_hidden()
-                    .child(div().h_full().w(relative(pct / 100.0)).rounded(u.w(1.0)).bg(color(fill))),
+                    .child(div().h_full().w(relative(d.fill_pct / 100.0)).rounded(u.w(1.0)).bg(color(fill))),
             )
     })))
 }

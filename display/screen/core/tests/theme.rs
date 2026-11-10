@@ -1,5 +1,4 @@
 use rack_screen_core::theme::{palette, Rgb};
-use rack_screen_core::tween::{ease_out, Tween, DURATION_MS};
 use rack_screen_core::view::Theme;
 
 #[test]
@@ -19,36 +18,4 @@ fn brightness_mixes_toward_black() {
     let d = palette(Theme::Dark);
     assert_eq!(d.dim(0.5).cpu, Rgb(38, 97, 128));
     assert_eq!(d.dim(1.0), d);
-}
-
-#[test]
-fn theme_change_blends() {
-    let (d, l) = (palette(Theme::Dark), palette(Theme::Light));
-    assert_eq!(d.mix(&l, 0.0), d);
-    assert_eq!(d.mix(&l, 1.0), l);
-    let half = d.mix(&l, 0.5).bg;
-    assert!(half.0 > d.bg.0 && half.0 < l.bg.0);
-}
-
-#[test]
-fn tween_eases_out_over_300ms() {
-    let t = Tween::new(10.0, 50.0, 1000.0);
-    assert_eq!(t.value(1000.0), 10.0);
-    assert_eq!(t.value(1000.0 + DURATION_MS), 50.0);
-    assert!(t.value(1150.0) > 30.0); // ease-out: past the linear midpoint halfway through
-    assert!(!t.done(1299.0) && t.done(1300.0));
-    assert!(ease_out(0.0).abs() < 1e-4 && (ease_out(1.0) - 1.0).abs() < 1e-4);
-}
-
-#[test]
-fn retarget_starts_from_where_it_is() {
-    let mut t = Tween::new(0.0, 100.0, 0.0);
-    let mid = t.value(100.0);
-    t.retarget(20.0, 100.0);
-    assert!((t.value(100.0) - mid).abs() < 1e-4);
-    assert_eq!(t.value(400.0), 20.0);
-    let mut s = Tween::settled(42.0);
-    assert!(s.done(0.0) && s.value(0.0) == 42.0);
-    s.retarget(42.0, 5.0);
-    assert!(s.done(5.0)); // same target: nothing to animate
 }
