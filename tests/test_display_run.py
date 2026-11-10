@@ -12,7 +12,14 @@ LOOP = Path(__file__).parent.parent / "display" / "screen-loop.sh"
 
 FAKES = {
     "seatd": "exec sleep 1000\n",
-    "cage": 'echo "cage $*" >> "$FAKE/log"; echo yes > "$FAKE/enabled"; exec sleep 1000\n',
+    # Like cage 0.2: runs its client and, on SIGTERM, waits for that client to exit (it never kills it).
+    "cage": """\
+echo "cage $*" >> "$FAKE/log"; echo yes > "$FAKE/enabled"
+shift; "$@" & child=$!
+trap 'wait $child; exit 0' TERM
+while true; do sleep 0.1; done
+""",
+    "rack-screen": "exec sleep 1000\n",
     "wlr-randr": """\
 if [ "$#" -ge 3 ]; then
   [ "$3" = --off ] && echo no > "$FAKE/enabled" || echo yes > "$FAKE/enabled"
@@ -43,7 +50,8 @@ def run(tmp_path):
 
     def start():
         env = {**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}", "FAKE": str(tmp_path), "POLL_S": "5",
-               "XDG_RUNTIME_DIR": str(tmp_path / "xdg"), "DRM_STATUS": str(tmp_path / "status")}
+               "XDG_RUNTIME_DIR": str(tmp_path / "xdg"), "DRM_STATUS": str(tmp_path / "status"),
+               "SCREEN_BIN": str(bin_ / "rack-screen")}
         p = subprocess.Popen(["bash", str(RUN)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                              start_new_session=True)
         procs.append(p)
@@ -135,3 +143,14 @@ def test_screen_loop_restarts_the_program(tmp_path):
         assert p.poll() is None
     finally:
         with_group_kill(p)
+
+
+def test_unplug_then_replug_brings_the_screen_back(fake, run):
+    (fake / "page-ok").touch()
+    run()
+    starts = lambda: sum(line.startswith("cage") for line in log(fake))
+    assert wait_until(lambda: starts() == 1, 3), log(fake)
+    (fake / "status").write_text("disconnected\n")
+    time.sleep(6)
+    (fake / "status").write_text("connected\n")
+    assert wait_until(lambda: starts() == 2, 12), log(fake)
