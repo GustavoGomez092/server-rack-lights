@@ -91,3 +91,18 @@ fn power_off_is_blank() {
     assert!(view_model(&parse(&MINIMAL.replace(r#""power":"on""#, r#""power":"off""#))).blank);
     assert!(ViewModel::empty().cpu.text == "–" && !ViewModel::empty().blank);
 }
+
+#[test]
+fn nulls_led_notify_sends_on_purpose() {
+    // The sampler sends `apps: null` when app sampling fails and a null disk when one read raises
+    // (led_notify/stats/sampler.py); the rest of the screen must stay live.
+    let json = r#"{"screen":{"power":"on","theme":null,"brightness":null},
+      "stats":{"cpu_pct":12.0,"apps":null,"temps":null,"memory":null,"uptime_s":null,
+        "disks":[null,{"label":"Main","mounted":true,"used_bytes":1073741824,"total_bytes":2147483648,"pct":50.0}]},
+      "banner":null,"host":null,"now":null}"#;
+    let vm = view_model(&parse(json));
+    assert_eq!(vm.cpu.text, "12");
+    assert!(vm.apps.is_empty() && vm.banners.is_empty());
+    assert_eq!(vm.disks.iter().map(|d| d.label.as_str()).collect::<Vec<_>>(), ["Main"]);
+    assert_eq!((vm.host.as_str(), vm.theme, vm.keep), ("Command Center", Theme::Dark, 1.0));
+}
