@@ -75,9 +75,9 @@ async def test_night_alert_wakes_screen(client, svc):
     assert (body["power"], body["theme"]) == ("on", "dark")
 
 
-def test_screen_page_served(client):
-    r = client.get("/screen/")
-    assert r.status_code == 200 and "Command Center" in r.text
+def test_screen_page_removed(client):
+    # The rack screen is a native program now (display/screen); the browser page is gone.
+    assert client.get("/screen/").status_code == 404
 
 
 def test_build_wires_screen(tmp_path):
