@@ -49,8 +49,8 @@ services:
         read_only: true
     labels:
       icon: http://192.168.4.61:8787/icon.svg?v=rack
-  # Draws the rack status page on the server's DisplayPort (seatd + cage + Chromium kiosk).
-  # Separate so a browser crash never touches the LED strip; led-notify works without it.
+  # Draws the rack status screen on the server's DisplayPort (seatd + cage + rack-screen, native GPUI).
+  # Separate so a screen crash never touches the LED strip; led-notify works without it.
   display:
     container_name: led-notify-display
     image: led-notify-display:local
@@ -58,7 +58,7 @@ services:
     network_mode: host
     restart: unless-stopped
     stop_grace_period: 10s
-    mem_limit: 1g
+    mem_limit: 256m  # ~101 MiB measured incl. driver-library cache (Nov 2026), ×2
     cpus: 1.0
     logging:
       driver: json-file
