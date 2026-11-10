@@ -37,8 +37,9 @@ Two containers, one app (`docker-compose.yml`):
 - `led-notify-display` (`display/`) runs `seatd` + `cage` on `/dev/dri` (needs `SYS_TTY_CONFIG`, `/dev/tty0`,
   `/dev/tty1`, `/run/udev`); cage's only client is `screen-loop.sh`, which keeps `rack-screen` running — a Rust
   program (`display/screen`, GPUI, Vulkan on the Vega iGPU) that reads `/api/screen/stream` and draws the screen.
-  It replaced a Chromium kiosk (~275 MiB) in Nov 2026. `run.sh` keeps every output enabled with `wlr-randr` and
-  never turns one off: the rack monitor falls asleep when its signal goes away and only a power cycle (unplug its
+  It replaced a Chromium kiosk in Nov 2026: 274 MiB → ~50–100 MiB for the container (half of it cached driver
+  libraries) plus ~14 MiB of GPU memory; ~5 % of one core with its 0.3 s glides (GPUI presents every vsync).
+  `run.sh` keeps every output enabled with `wlr-randr` and never turns one off: the rack monitor falls asleep when its signal goes away and only a power cycle (unplug its
   USB power) wakes it again, so "off" is pure black drawn by `rack-screen` (the backlight stays lit). If
   `rack-screen` dies, only it restarts; cage (and the signal) stays. Nothing starts until a DRM connector reports
   `connected` (with no monitor, cage spins a CPU core). `docker logs led-notify-display` says
