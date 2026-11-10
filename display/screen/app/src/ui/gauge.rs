@@ -35,13 +35,13 @@ fn ring(bounds: Bounds<Pixels>, fill_pct: f32, track: Rgb, arc: Rgb, window: &mu
     }
 }
 
-fn gauge(g: &GaugeVm, base: Rgb, caption: &'static str, p: &Palette, u: Vu, max_ring: Pixels) -> Div {
+fn gauge(g: &GaugeVm, fill: f32, base: Rgb, caption: &'static str, p: &Palette, u: Vu, max_ring: Pixels) -> Div {
     let arc = match g.level {
         Level::Ok => base,
         Level::Warn => p.warn,
         Level::Bad => p.bad,
     };
-    let (track, fill) = (p.line, g.fill_pct);
+    let track = p.line;
     let (num, unit) = (u.w(4.6), u.w(1.8));
     let value = div()
         .absolute()
@@ -95,7 +95,7 @@ fn gauge(g: &GaugeVm, base: Rgb, caption: &'static str, p: &Palette, u: Vu, max_
 }
 
 /// Three equal columns, 1.4vw apart, each ring as wide as its column but at most 38vh.
-pub fn row(vm: &ViewModel, p: &Palette, u: Vu, width: Pixels) -> Div {
+pub fn row(vm: &ViewModel, fills: [f32; 3], p: &Palette, u: Vu, width: Pixels) -> Div {
     let col = (width - u.w(1.4) * 2.0) / 3.0;
     let ring_px = col.min(u.h(38.0));
     let cell = |g| div().w(col).h_full().child(g);
@@ -104,7 +104,7 @@ pub fn row(vm: &ViewModel, p: &Palette, u: Vu, width: Pixels) -> Div {
         .min_h_0()
         .flex()
         .gap(u.w(1.4))
-        .child(cell(gauge(&vm.cpu, p.cpu, "CPU", p, u, ring_px)))
-        .child(cell(gauge(&vm.ram, p.ram, "RAM", p, u, ring_px)))
-        .child(cell(gauge(&vm.temp, p.temp, "CPU temp", p, u, ring_px)))
+        .child(cell(gauge(&vm.cpu, fills[0], p.cpu, "CPU", p, u, ring_px)))
+        .child(cell(gauge(&vm.ram, fills[1], p.ram, "RAM", p, u, ring_px)))
+        .child(cell(gauge(&vm.temp, fills[2], p.temp, "CPU temp", p, u, ring_px)))
 }

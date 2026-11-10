@@ -70,4 +70,9 @@ impl Palette {
     pub fn dim(&self, keep: f32) -> Palette {
         self.zip(self, |a, _| a * keep)
     }
+
+    /// `t` = 0 is self, 1 is `other` (theme and brightness fades).
+    pub fn mix(&self, other: &Palette, t: f32) -> Palette {
+        self.zip(other, |a, b| a + (b - a) * t)
+    }
 }
