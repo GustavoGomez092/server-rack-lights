@@ -8,10 +8,11 @@ from pathlib import Path
 import pytest
 
 RUN = Path(__file__).parent.parent / "display" / "run.sh"
+LOOP = Path(__file__).parent.parent / "display" / "screen-loop.sh"
 
 FAKES = {
     "seatd": "exec sleep 1000\n",
-    "cage": 'echo cage >> "$FAKE/log"; echo yes > "$FAKE/enabled"; exec sleep 1000\n',
+    "cage": 'echo "cage $*" >> "$FAKE/log"; echo yes > "$FAKE/enabled"; exec sleep 1000\n',
     "wlr-randr": """\
 if [ "$#" -ge 3 ]; then
   [ "$3" = --off ] && echo no > "$FAKE/enabled" || echo yes > "$FAKE/enabled"
@@ -86,7 +87,8 @@ def test_night_never_cuts_the_signal(fake, run):
     (fake / "api").write_text('{"power":"off","theme":"dark"}')
     (fake / "page-ok").touch()
     run()
-    assert wait_until(lambda: "cage" in log(fake), 3), log(fake)
+    assert wait_until(lambda: any(line.startswith("cage") for line in log(fake)), 3), log(fake)
+    assert any(line.endswith("screen-loop.sh") for line in log(fake)), log(fake)  # cage runs the restart loop
     time.sleep(6.5)
     assert not any("--off" in line for line in log(fake)), log(fake)
 
@@ -94,7 +96,7 @@ def test_night_never_cuts_the_signal(fake, run):
 def test_a_disabled_output_is_turned_back_on(fake, run):
     (fake / "page-ok").touch()
     run()
-    assert wait_until(lambda: "cage" in log(fake), 3), log(fake)
+    assert wait_until(lambda: any(line.startswith("cage") for line in log(fake)), 3), log(fake)
     (fake / "enabled").write_text("no\n")
     assert wait_until(lambda: "--on DP-1" in log(fake), 7), log(fake)
 
@@ -103,17 +105,33 @@ def test_kiosk_waits_for_led_notify_page(fake, run):
     (fake / "api").write_text('{"power":"on"}')
     run()
     time.sleep(2)
-    assert "cage" not in log(fake)  # never show Chromium's error page on the monitor
+    assert not any(line.startswith("cage") for line in log(fake))  # never show Chromium's error page on the monitor
     (fake / "page-ok").touch()
-    assert wait_until(lambda: "cage" in log(fake), 7), log(fake)
+    assert wait_until(lambda: any(line.startswith("cage") for line in log(fake)), 7), log(fake)
 
 
 def test_sigterm_stops_quickly(fake, run):
     (fake / "api").write_text('{"power":"on"}')
     (fake / "page-ok").touch()
     p = run()
-    assert wait_until(lambda: "cage" in log(fake), 3)
+    assert wait_until(lambda: any(line.startswith("cage") for line in log(fake)), 3)
     t0 = time.time()
     p.send_signal(signal.SIGTERM)
     p.wait(timeout=5)
     assert time.time() - t0 < 2
+
+
+def test_screen_loop_restarts_the_program(tmp_path):
+    # cage exits when its client does, and a cage restart could drop the monitor's signal; so cage runs this
+    # loop, and only the screen program restarts.
+    prog = tmp_path / "prog"
+    prog.write_text(f'#!/bin/bash\necho run >> "{tmp_path}/runs"\nexit 1\n')
+    prog.chmod(0o755)
+    p = subprocess.Popen(["bash", str(LOOP)], env={**os.environ, "SCREEN_BIN": str(prog)},
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        assert wait_until(lambda: (tmp_path / "runs").exists() and
+                          len((tmp_path / "runs").read_text().split()) >= 2, 4)
+        assert p.poll() is None
+    finally:
+        with_group_kill(p)

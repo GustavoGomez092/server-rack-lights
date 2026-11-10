@@ -1,16 +1,16 @@
 #!/bin/bash
-# Keeps a Chromium kiosk on the rack monitor and its output enabled.
+# Keeps the native rack screen (rack-screen, via screen-loop.sh) on the rack monitor and its output enabled.
 # The output is never turned off: the rack monitor (HCT board) falls asleep without a signal and only a power
 # cycle wakes it again. Night "off" is a black page that the status page draws itself (/api/screen power).
 set -u
-URL=${SCREEN_URL:-http://127.0.0.1:8787/screen/}
+URL=${SCREEN_URL:-http://127.0.0.1:8787/api/screen/data}
 POLL_S=${POLL_S:-5}
 DRM_STATUS=${DRM_STATUS:-/sys/class/drm/card*-*/status}
 
 log() { echo "$(date '+%F %T') $*"; }
 randr() { WAYLAND_DISPLAY=wayland-0 wlr-randr "$@"; }
 nap() { sleep "$1" & wait $!; }  # interruptible, so SIGTERM is handled at once
-# cage + Chromium spin a CPU core when no monitor is connected, so the kiosk only runs while one is.
+# cage spins a CPU core when no monitor is connected, so the kiosk only runs while one is.
 # shellcheck disable=SC2086  # DRM_STATUS is a glob
 monitor() { grep -qx connected $DRM_STATUS 2>/dev/null; }
 outputs() { randr 2>/dev/null | awk '/^[^ ]/{n=$1} /Enabled:/{print n ":" $2}'; }
@@ -43,10 +43,7 @@ apply() {
 start_cage() {
   rm -f "$XDG_RUNTIME_DIR"/wayland-0*
   # WAYLAND_DISPLAY must stay unset for cage itself, or wlroots nests into a (missing) compositor.
-  cage -- chromium --kiosk --no-sandbox --ozone-platform=wayland --disable-gpu --no-first-run --noerrdialogs \
-    --disable-infobars --disable-extensions --disable-background-networking --disable-component-update \
-    --disable-dev-shm-usage --disable-features=Translate,MediaRouter --password-store=basic \
-    --renderer-process-limit=1 --user-data-dir=/tmp/chromium "$URL" >/tmp/cage.log 2>&1 &
+  cage -- "${LOOP:-$(dirname "$0")/screen-loop.sh}" >/tmp/cage.log 2>&1 &
   CAGE=$!
   log "kiosk started (pid $CAGE)"
   for _ in $(seq 1 30); do
@@ -73,9 +70,9 @@ while true; do
   if [ "$CAGE" = 0 ] || ! kill -0 "$CAGE" 2>/dev/null; then
     [ "$CAGE" = 0 ] || log "kiosk exited: $(tail -n 3 /tmp/cage.log | tr '\n' ' ')"
     CAGE=0
-    # Never put Chromium's own (light) error page on the monitor: wait until the status page answers.
+    # Start once led-notify answers, so the first frame already has numbers and the right theme.
     if ! curl -fsS -m 3 -o /dev/null "$URL" 2>/dev/null; then
-      say_once "waiting for the status page at $URL"
+      say_once "waiting for led-notify at $URL"
       nap "$POLL_S"; continue
     fi
     note=""
